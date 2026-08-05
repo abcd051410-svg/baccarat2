@@ -75,7 +75,7 @@ def update_user():
 @app.route("/api/admin/users", methods=["GET"])
 def admin_get_users():
   pw = request.args.get("pw")
-  if pw != "6974":
+  if pw != "3195":
     return jsonify({"error": "Unauthorized"}), 403
 
   conn = sqlite3.connect(DB_NAME)
