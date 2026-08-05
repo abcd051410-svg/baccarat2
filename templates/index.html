@@ -459,17 +459,26 @@
         if (newCashInput !== null) {
             const newCash = parseInt(newCashInput, 10);
             if (!isNaN(newCash) && newCash >= 0) {
-                const res = await fetch('/api/admin/edit', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ pw, username, cash: newCash })
-                });
-                if (res.ok) {
-                    if (username === currentUser) {
-                        cash = newCash;
-                        document.getElementById('cash-val').innerText = Math.floor(cash).toLocaleString();
+                try {
+                    const res = await fetch('/api/admin/edit', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ pw, username, cash: newCash })
+                    });
+                    const data = await res.json();
+                    if (res.ok && data.success) {
+                        // 본인 계정을 수정했을 경우 화면의 보유 잔액도 즉시 동기화
+                        if (username === currentUser) {
+                            cash = newCash;
+                            document.getElementById('cash-val').innerText = Math.floor(cash).toLocaleString();
+                        }
+                        alert(`[${username}] 유저의 잔액이 ₩${newCash.toLocaleString()}(으)로 수정되었습니다.`);
+                        verifyAdminPassword(); // 관리자 목록 새로고침
+                    } else {
+                        alert("잔액 수정에 실패했습니다.");
                     }
-                    verifyAdminPassword();
+                } catch (e) {
+                    alert("서버 통신 중 오류가 발생했습니다.");
                 }
             } else {
                 alert("유효한 숫자를 입력하세요.");

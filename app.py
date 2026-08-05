@@ -91,22 +91,38 @@ def admin_get_users():
 
 
 # 관리자: 유저 잔액 수정
-@app.route("/api/admin/edit", methods=["POST"])
+@app.route('/api/admin/edit', methods=['POST'])
+
 def admin_edit_user():
+
   data = request.json
-  if data.get("pw") != "6974":
-    return jsonify({"error": "Unauthorized"}), 403
 
-  username = data.get("username")
-  new_cash = data.get("cash")
+  pw = data.get('pw')
 
-  conn = sqlite3.connect(DB_NAME)
+  username = data.get('username')
+
+  new_cash = data.get('cash')
+
+
+
+  if pw != "3195":
+
+    return jsonify({"error": "Unauthorized"}), 401
+
+
+
+  conn = get_db_connection()
+
   cursor = conn.cursor()
-  cursor.execute(
-      "UPDATE users SET cash = ? WHERE username = ?", (new_cash, username)
-  )
+
+  cursor.execute('UPDATE users SET cash = ? WHERE username = ?', (new_cash, username))
+
   conn.commit()
+
   conn.close()
+
+
+
   return jsonify({"success": True})
 
 
