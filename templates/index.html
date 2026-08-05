@@ -20,10 +20,6 @@
         .admin-card { max-width: 450px; max-height: 85vh; text-align: left; }
         .admin-user-list { max-height: 280px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding-right: 4px; }
         .admin-user-item { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); padding: 10px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; }
-        .admin-actions { display: flex; gap: 4px; }
-        .admin-action-btn { padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; cursor: pointer; border: none; }
-        .btn-edit { background: #3b82f6; color: #fff; }
-        .btn-del { background: #ef4444; color: #fff; }
         .header-bar { display: flex; justify-content: space-between; align-items: center; height: 36px; padding: 0 4px; z-index: 5; }
         .header-title { font-size: 0.9rem; font-weight: 800; letter-spacing: 1px; color: #ffd700; display: flex; align-items: center; gap: 6px; }
         .menu-btn { background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); color: #fff; padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: bold; cursor: pointer; }
@@ -114,9 +110,10 @@
         .road-B { border-color: #dc2626; }
         .tie-line::after { content: ''; position: absolute; top: 4px; left: -2px; width: 13px; height: 2px; background: #16a34a; transform: rotate(-45deg); }
         .control-bar { background: #000; border-top: 1px solid #222; padding: 6px 4px; font-size: 0.75rem; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; }
-        .account-info { display: flex; gap: 10px; align-items: center; font-weight: bold; color: #aaa; }
+        .account-info { display: flex; gap: 8px; align-items: center; font-weight: bold; color: #aaa; }
         .account-info span { color: #ffd700; }
         .close-btn { background: linear-gradient(135deg, #d97706, #b45309); color: #fff; border: none; padding: 5px 10px; border-radius: 6px; font-weight: bold; font-size: 0.75rem; cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.3); }
+        .close-btn:disabled { opacity: 0.4; cursor: not-allowed; }
     </style>
 </head>
 <body>
@@ -137,10 +134,10 @@
 <div class="admin-modal-overlay" id="ranking-modal" style="display: none;">
     <div class="admin-card" style="max-width: 400px;">
         <div class="login-title" style="display:flex; justify-content:space-between; align-items:center;">
-            <span>🏆 실시간 잔고 랭킹</span>
+            <span>🏆 실시간 수익률 랭킹</span>
             <button onclick="closeRankingModal()" style="background:none; border:none; color:#aaa; font-size:1.2rem; cursor:pointer;">✕</button>
         </div>
-        <div style="font-size: 0.8rem; color: #aaa;">서버 유저들의 보유 자산 순위입니다.</div>
+        <div style="font-size: 0.8rem; color: #aaa;">유저들의 출금 금액 대비 마감 수익률 순위입니다.</div>
         <div class="admin-user-list" id="ranking-user-list-container"></div>
         <button class="login-btn" style="background: #374151; color: #fff;" onclick="closeRankingModal()">닫기</button>
     </div>
@@ -195,10 +192,21 @@
             </div>
 
             <div class="sidebar-item">
-                <span class="sidebar-label">총 누적 롤링 (배팅액)</span>
+                <span class="sidebar-label">필요 롤링 진행도</span>
+                <span class="sidebar-value"><span id="rolling-progress-val">0</span> / <span id="rolling-target-val">0</span> (₩)</span>
+            </div>
+
+            <div class="sidebar-item">
+                <span class="sidebar-label">총 누적 배팅액 (롤링)</span>
                 <span class="sidebar-value">₩<span id="rolling-val">0</span></span>
             </div>
-            <button class="sidebar-btn rank-open-btn" onclick="openRankingModal()">🏆 잔고 랭킹 보기</button>
+
+            <div class="sidebar-item">
+                <span class="sidebar-label">현재 총 수익률</span>
+                <span class="sidebar-value" id="profit-rate-val">0.0%</span>
+            </div>
+
+            <button class="sidebar-btn rank-open-btn" onclick="openRankingModal()">🏆 수익률 랭킹 보기</button>
             <button class="sidebar-btn admin-open-btn" onclick="openAdminAuthModal()">관리자 모드</button>
             <button class="sidebar-btn logout-btn" onclick="handleLogout()">로그아웃</button>
         </div>
@@ -284,19 +292,22 @@
             <div>배팅: ₩<span id="bet-val">0</span></div>
             <div>획득: ₩<span id="paid-val">0</span></div>
         </div>
-        <button class="close-btn" onclick="handleCloseGame()">마감</button>
+        <button class="close-btn" id="close-game-btn" onclick="handleCloseGame()">마감</button>
     </div>
 </div>
 
 <script>
     let currentUser = null;
-    let serverCash = 0; // DB 잔고
-    let cash = 0;       // 게임 플레이 보유금
+    let serverCash = 0;
+    let cash = 0;
     let totalRolling = 0;
+    let initialWithdraw = 0; // 출금해서 게임 시작한 원금 기준
+    let currentRolling = 0;  // 현재 출금 후 누적 배팅량
+    let profitRate = 0.0;    // 총 수익률 (%)
+
     let selectedChip = 500;
     let bets = { PLAYER: 0, BANKER: 0, TIE: 0, P_PAIR: 0, B_PAIR: 0, PERFECT_PAIR: 0 };
     let isBettingOpen = false;
-
     let authMode = 'login';
 
     let lastWinner = null;
@@ -370,17 +381,20 @@
                 if (res.ok) {
                     currentUser = data.username;
                     serverCash = data.cash;
-                    cash = 0; // 로그인 직후 보유금은 0, 출금해서 충전해야 함
+                    cash = 0;
                     totalRolling = data.total_rolling;
+                    initialWithdraw = data.initial_withdraw || 0;
+                    currentRolling = data.current_rolling || 0;
+                    profitRate = data.profit_rate || 0.0;
 
                     localStorage.setItem('bacc_server_user', currentUser);
 
                     document.getElementById('login-overlay').style.display = 'none';
                     document.getElementById('header-nickname').innerText = `${currentUser} 님`;
                     document.getElementById('sidebar-user-title').innerText = `${currentUser} 님의 정보`;
-                    document.getElementById('bank-cash-val').innerText = Math.floor(serverCash).toLocaleString();
-                    document.getElementById('cash-val').innerText = Math.floor(cash).toLocaleString();
-                    document.getElementById('rolling-val').innerText = Math.floor(totalRolling).toLocaleString();
+
+                    updateUIValues();
+                    updateCloseButtonState();
 
                     initBigRoadGrid();
                     generateRandomHistory();
@@ -401,7 +415,7 @@
         }
     }
 
-    // 출금 기능: 잔고 -> 보유금으로 이동
+    // 출금 기능: 잔고 -> 보유금 전환 및 롤링 요구치 세팅
     async function processWithdraw() {
         const inputAmt = parseInt(document.getElementById('withdraw-input-amt').value, 10);
         if (isNaN(inputAmt) || inputAmt <= 0) {
@@ -415,17 +429,18 @@
 
         serverCash -= inputAmt;
         cash += inputAmt;
+        initialWithdraw += inputAmt; // 출금 누적 원금 업데이트
 
-        document.getElementById('bank-cash-val').innerText = Math.floor(serverCash).toLocaleString();
-        document.getElementById('cash-val').innerText = Math.floor(cash).toLocaleString();
         document.getElementById('withdraw-input-amt').value = '';
+        updateUIValues();
+        updateCloseButtonState();
 
         await updateServerData(0);
-        alert(`₩${inputAmt.toLocaleString()}이(가) 출금되어 게임 보유금으로 충전되었습니다.`);
+        alert(`₩${inputAmt.toLocaleString()}이(가) 출금되어 게임 보유금으로 충전되었습니다. (이제 롤링 100%를 채워야 마감할 수 있습니다)`);
         toggleSidebar(false);
     }
 
-    // 마감 기능: 현재 보유금 및 획득금을 잔고로 이동
+    // 마감 기능: 출금 원금과 비교하여 수익률 계산 후 은행 잔고로 반영
     async function handleCloseGame() {
         let totalToBank = cash;
         if (totalToBank <= 0) {
@@ -433,26 +448,74 @@
             return;
         }
 
-        if (confirm(`현재 보유 중인 ₩${totalToBank.toLocaleString()}을(를) 은행 잔고로 마감(이동)하시겠습니까?`)) {
+        // 롤링 100% 체크 조건
+        if (currentRolling < initialWithdraw) {
+            alert(`롤링을 모두 채우지 못했습니다! (현재 ₩${currentRolling.toLocaleString()} / 필요 ₩${initialWithdraw.toLocaleString()})`);
+            return;
+        }
+
+        if (confirm(`현재 보유 중인 ₩${totalToBank.toLocaleString()}을(를) 은행 잔고로 마감하시겠습니까?`)) {
+            // 수익률 계산: ((마감 금액 - 출금 원금) / 출금 원금) * 100
+            if (initialWithdraw > 0) {
+                profitRate = ((totalToBank - initialWithdraw) / initialWithdraw) * 100;
+            } else {
+                profitRate = 0.0;
+            }
+
             serverCash += totalToBank;
             cash = 0;
+            initialWithdraw = 0;
+            currentRolling = 0;
 
-            document.getElementById('bank-cash-val').innerText = Math.floor(serverCash).toLocaleString();
-            document.getElementById('cash-val').innerText = Math.floor(cash).toLocaleString();
+            updateUIValues();
+            updateCloseButtonState();
             document.getElementById('paid-val').innerText = '0';
 
             await updateServerData(0);
-            alert("정상적으로 마감 처리되었습니다.");
+            alert(`정상적으로 마감 처리되었습니다. (이번 게임 총 수익률: ${profitRate.toFixed(2)}%)`);
         }
+    }
+
+    function updateCloseButtonState() {
+        const closeBtn = document.getElementById('close-game-btn');
+        if (initialWithdraw > 0 && currentRolling < initialWithdraw) {
+            closeBtn.disabled = true;
+            closeBtn.title = "출금 금액 대비 롤링 100%를 채워야 마감할 수 있습니다.";
+        } else {
+            closeBtn.disabled = false;
+            closeBtn.title = "";
+        }
+    }
+
+    function updateUIValues() {
+        document.getElementById('bank-cash-val').innerText = Math.floor(serverCash).toLocaleString();
+        document.getElementById('cash-val').innerText = Math.floor(cash).toLocaleString();
+        document.getElementById('rolling-val').innerText = Math.floor(totalRolling).toLocaleString();
+        document.getElementById('rolling-progress-val').innerText = Math.floor(currentRolling).toLocaleString();
+        document.getElementById('rolling-target-val').innerText = Math.floor(initialWithdraw).toLocaleString();
+
+        const rateEl = document.getElementById('profit-rate-val');
+        rateEl.innerText = `${profitRate.toFixed(2)}%`;
+        rateEl.style.color = profitRate >= 0 ? '#4ade80' : '#ef4444';
     }
 
     async function updateServerData(rollingAdd = 0) {
         if (!currentUser) return;
+        currentRolling += rollingAdd;
+        totalRolling += rollingAdd;
+
         try {
             await fetch('/api/update', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username: currentUser, cash: serverCash, rolling_add: rollingAdd })
+                body: JSON.stringify({
+                    username: currentUser,
+                    cash: serverCash,
+                    rolling_add: rollingAdd,
+                    initial_withdraw: initialWithdraw,
+                    current_rolling: currentRolling,
+                    profit_rate: profitRate
+                })
             });
         } catch (e) {
             console.error("서버 동기화 실패");
@@ -493,17 +556,20 @@
             container.innerHTML = '<div style="text-align:center; color:#aaa; padding:15px;">등록된 유저가 없습니다.</div>';
             return;
         }
-        users.sort((a, b) => b.cash - a.cash);
+        // 수익률(profit_rate) 기준 내림차순 정렬
+        users.sort((a, b) => b.profit_rate - a.profit_rate);
 
         users.forEach((u, index) => {
             const item = document.createElement('div');
             item.className = 'admin-user-item';
             const isMe = u.username === currentUser ? '(나)' : '';
+            const colorClass = u.profit_rate >= 0 ? 'color:#4ade80;' : 'color:#ef4444;';
             item.innerHTML = `
                 <div>
                     <div style="font-weight:bold; color:#ffd700;">${index + 1}위. ${u.username} ${isMe}</div>
                     <div style="font-size:0.75rem; color:#aaa;">은행 잔액: ₩${Math.floor(u.cash).toLocaleString()}</div>
                 </div>
+                <div style="font-weight:bold; ${colorClass}">${u.profit_rate.toFixed(2)}%</div>
             `;
             container.appendChild(item);
         });
@@ -554,7 +620,7 @@
             item.innerHTML = `
                 <div>
                     <div style="font-weight:bold; color:#ffd700;">${u.username} ${isMe}</div>
-                    <div style="font-size:0.75rem; color:#aaa;">잔액: ₩${Math.floor(u.cash).toLocaleString()} | 롤링: ₩${Math.floor(u.total_rolling).toLocaleString()}</div>
+                    <div style="font-size:0.75rem; color:#aaa;">잔액: ₩${Math.floor(u.cash).toLocaleString()} | 수익률: ${u.profit_rate.toFixed(2)}%</div>
                 </div>
                 <div class="admin-actions">
                     <button class="admin-action-btn btn-edit" onclick="adminEditUser('${u.username}', '${pw}')">수정</button>
@@ -580,7 +646,7 @@
                     if (res.ok && data.success) {
                         if (username === currentUser) {
                             serverCash = newCash;
-                            document.getElementById('bank-cash-val').innerText = Math.floor(serverCash).toLocaleString();
+                            updateUIValues();
                         }
                         alert(`[${username}] 유저의 잔액이 ₩${newCash.toLocaleString()}(으)로 수정되었습니다.`);
                         verifyAdminPassword();
@@ -667,17 +733,13 @@
             const currentRoundBet = Object.values(bets).reduce((a, b) => a + b, 0);
             if (currentRoundBet > 0) {
                 await updateServerData(currentRoundBet);
-                rollingValUpdate(currentRoundBet);
+                updateUIValues();
+                updateCloseButtonState();
             }
 
             await runBaccaratGame();
             await delay(3700);
         }
-    }
-
-    function rollingValUpdate(add) {
-        totalRolling += add;
-        document.getElementById('rolling-val').innerText = Math.floor(totalRolling).toLocaleString();
     }
 
     function createDeck() {
@@ -803,10 +865,10 @@
         if (isPerfPair && bets.PERFECT_PAIR > 0) winPayout += bets.PERFECT_PAIR * 26;
 
         const netProfit = winPayout - totalBet;
-        cash += winPayout; // 승리금은 보유금(cash)으로 들어감
+        cash += winPayout;
 
         document.getElementById('paid-val').innerText = Math.floor(winPayout).toLocaleString();
-        document.getElementById('cash-val').innerText = Math.floor(cash).toLocaleString();
+        updateUIValues();
 
         showResultEffect(win, netProfit, totalBet);
         updateBigRoad(win, true);

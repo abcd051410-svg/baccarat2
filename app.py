@@ -13,14 +13,16 @@ def init_db():
                                                     username TEXT PRIMARY KEY,
                                                     password TEXT NOT NULL,
                                                     cash INTEGER DEFAULT 50000,
-                                                    total_rolling INTEGER DEFAULT 0
+                                                    total_rolling INTEGER DEFAULT 0,
+                                                    initial_withdraw INTEGER DEFAULT 0,
+                                                    current_rolling INTEGER DEFAULT 0,
+                                                    profit_rate REAL DEFAULT 0.0
                  )
                  """)
   conn.commit()
   conn.close()
 
 
-# 회원가입 API
 @app.route("/api/register", methods=["POST"])
 def register():
   data = request.json
@@ -39,8 +41,10 @@ def register():
     return jsonify({"error": "이미 존재하는 아이디입니다."}), 400
 
   cursor.execute(
-    "INSERT INTO users (username, password, cash, total_rolling) VALUES (?,"
-    " ?, 50000, 0)",
+    """
+    INSERT INTO users (username, password, cash, total_rolling, initial_withdraw, current_rolling, profit_rate)
+    VALUES (?, ?, 50000, 0, 0, 0, 0.0)
+    """,
     (username, password),
   )
   conn.commit()
@@ -48,7 +52,6 @@ def register():
   return jsonify({"success": True, "message": "회원가입이 완료되었습니다."})
 
 
-# 로그인 API
 @app.route("/api/login", methods=["POST"])
 def login():
   data = request.json
@@ -61,7 +64,10 @@ def login():
   conn = sqlite3.connect(DB_NAME)
   cursor = conn.cursor()
   cursor.execute(
-    "SELECT password, cash, total_rolling FROM users WHERE username = ?",
+    """
+    SELECT password, cash, total_rolling, initial_withdraw, current_rolling, profit_rate
+    FROM users WHERE username = ?
+    """,
     (username,),
   )
   row = cursor.fetchone()
@@ -70,41 +76,60 @@ def login():
     conn.close()
     return jsonify({"error": "존재하지 않는 아이디입니다."}), 400
 
-  db_password, cash, total_rolling = row
+  db_password, cash, total_rolling, initial_withdraw, current_rolling, profit_rate = (
+    row
+  )
   if db_password != password:
     conn.close()
     return jsonify({"error": "비밀번호가 일치하지 않습니다."}), 400
 
   conn.close()
-  return jsonify(
-    {"username": username, "cash": cash, "total_rolling": total_rolling}
-  )
+  return jsonify({
+    "username": username,
+    "cash": cash,
+    "total_rolling": total_rolling,
+    "initial_withdraw": initial_withdraw,
+    "current_rolling": current_rolling,
+    "profit_rate": profit_rate,
+  })
 
 
-# 유저 데이터 업데이트 (배팅 및 잔액 변동)
 @app.route("/api/update", methods=["POST"])
 def update_user():
   data = request.json
   username = data.get("username")
   cash = data.get("cash")
   rolling_add = data.get("rolling_add", 0)
+  initial_withdraw = data.get("initial_withdraw")
+  current_rolling = data.get("current_rolling")
+  profit_rate = data.get("profit_rate")
 
   conn = sqlite3.connect(DB_NAME)
   cursor = conn.cursor()
   cursor.execute(
     """
     UPDATE users
-    SET cash = ?, total_rolling = total_rolling + ?
+    SET cash = ?,
+        total_rolling = total_rolling + ?,
+        initial_withdraw = COALESCE(?, initial_withdraw),
+        current_rolling = COALESCE(?, current_rolling),
+        profit_rate = COALESCE(?, profit_rate)
     WHERE username = ?
     """,
-    (cash, rolling_add, username),
+    (
+      cash,
+      rolling_add,
+      initial_withdraw,
+      current_rolling,
+      profit_rate,
+      username,
+    ),
   )
   conn.commit()
   conn.close()
   return jsonify({"success": True})
 
 
-# 관리자: 모든 유저 목록 조회
 @app.route("/api/admin/users", methods=["GET"])
 def admin_get_users():
   pw = request.args.get("pw")
@@ -113,17 +138,26 @@ def admin_get_users():
 
   conn = sqlite3.connect(DB_NAME)
   cursor = conn.cursor()
-  cursor.execute("SELECT username, cash, total_rolling FROM users")
+  cursor.execute("""
+                 SELECT username, cash, total_rolling, initial_withdraw, current_rolling, profit_rate
+                 FROM users
+                 """)
   rows = cursor.fetchall()
   conn.close()
 
-  users = [
-    {"username": r[0], "cash": r[1], "total_rolling": r[2]} for r in rows
-  ]
+  users = []
+  for r in rows:
+    users.append({
+      "username": r[0],
+      "cash": r[1],
+      "total_rolling": r[2],
+      "initial_withdraw": r[3],
+      "current_rolling": r[4],
+      "profit_rate": r[5],
+    })
   return jsonify(users)
 
 
-# 관리자: 유저 잔액 수정
 @app.route("/api/admin/edit", methods=["POST"])
 def admin_edit_user():
   data = request.json
@@ -145,7 +179,6 @@ def admin_edit_user():
   return jsonify({"success": True})
 
 
-# 관리자: 유저 삭제
 @app.route("/api/admin/delete", methods=["POST"])
 def admin_delete_user():
   data = request.json
