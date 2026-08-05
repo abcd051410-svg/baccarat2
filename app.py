@@ -129,9 +129,9 @@ def admin_edit_user():
 # 관리자: 유저 삭제
 @app.route("/api/admin/delete", methods=["POST"])
 def admin_delete_user():
-  data.get("pw") != "6974"
+  data.get("pw") != "3195"
   data = request.json
-  if data.get("pw") != "6974":
+  if data.get("pw") != "3195":
     return jsonify({"error": "Unauthorized"}), 403
 
   username = data.get("username")
