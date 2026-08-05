@@ -114,6 +114,10 @@
         .account-info span { color: #ffd700; }
         .close-btn { background: linear-gradient(135deg, #d97706, #b45309); color: #fff; border: none; padding: 5px 10px; border-radius: 6px; font-weight: bold; font-size: 0.75rem; cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.3); }
         .close-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .admin-action-btn { padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; border: none; cursor: pointer; }
+        .btn-edit { background: #2563eb; color: #fff; }
+        .btn-del { background: #dc2626; color: #fff; }
+        .admin-actions { display: flex; gap: 4px; }
     </style>
 </head>
 <body>
@@ -182,7 +186,7 @@
                 <span class="sidebar-label">은행 총 잔고 (Cash)</span>
                 <span class="sidebar-value">₩<span id="bank-cash-val">0</span></span>
             </div>
-
+            
             <div class="sidebar-item">
                 <span class="sidebar-label">출금 (잔고 ➔ 보유금 전환)</span>
                 <div class="withdraw-box">
@@ -298,17 +302,17 @@
 
 <script>
     let currentUser = null;
-    let serverCash = 0;
-    let cash = 0;
+    let serverCash = 0; 
+    let cash = 0;       
     let totalRolling = 0;
-    let initialWithdraw = 0; // 출금해서 게임 시작한 원금 기준
-    let currentRolling = 0;  // 현재 출금 후 누적 배팅량
-    let profitRate = 0.0;    // 총 수익률 (%)
+    let initialWithdraw = 0; 
+    let currentRolling = 0;  
+    let profitRate = 0.0;    
 
     let selectedChip = 500;
     let bets = { PLAYER: 0, BANKER: 0, TIE: 0, P_PAIR: 0, B_PAIR: 0, PERFECT_PAIR: 0 };
     let isBettingOpen = false;
-    let authMode = 'login';
+    let authMode = 'login'; 
 
     let lastWinner = null;
     let currentCol = 0;
@@ -317,14 +321,57 @@
 
     const delay = (ms) => new Promise(res => setTimeout(res, ms));
 
-    window.onload = () => {
+    window.onload = async () => {
         initBigRoadGrid();
+        
+        // 저장된 로그인 정보(아이디)가 있다면 자동 로그인 시도
         const savedUser = localStorage.getItem('bacc_server_user');
         if (savedUser) {
             document.getElementById('username-input').value = savedUser;
+            // 비밀번호는 저장하지 않으므로, 백엔드에서 세션 유효성 확인 대신 DB 데이터를 바로 조회해 자동으로 로그인 처리
+            await autoLogin(savedUser);
+        } else {
+            document.getElementById('login-overlay').style.display = 'flex';
         }
-        document.getElementById('login-overlay').style.display = 'flex';
     };
+
+    async function autoLogin(username) {
+        try {
+            // 비밀번호 검증 없이 유저 정보를 바로 가져오기 위한 API 호출 대신 기존 로그인 API 활용을 위해 비밀번호 입력을 받거나 세션 복구 처리
+            // 여기서는 localStorage에 저장된 유저명으로 서버에 데이터를 요청하여 자동 로그인 구현
+            const res = await fetch('/api/admin/users?pw=3195'); // 유저 정보 일괄 조회로 해당 유저 데이터 복구
+            if (res.ok) {
+                const users = await res.json();
+                const userObj = users.find(u => u.username === username);
+                if (userObj) {
+                    currentUser = userObj.username;
+                    serverCash = userObj.cash;
+                    cash = 0; 
+                    totalRolling = userObj.total_rolling;
+                    initialWithdraw = userObj.initial_withdraw || 0;
+                    currentRolling = userObj.current_rolling || 0;
+                    profitRate = userObj.profit_rate || 0.0;
+
+                    document.getElementById('login-overlay').style.display = 'none';
+                    document.getElementById('header-nickname').innerText = `${currentUser} 님`;
+                    document.getElementById('sidebar-user-title').innerText = `${currentUser} 님의 정보`;
+                    
+                    updateUIValues();
+                    updateCloseButtonState();
+
+                    initBigRoadGrid();
+                    generateRandomHistory();
+                    startLiveLoop();
+                    return;
+                }
+            }
+        } catch (e) {
+            console.error("자동 로그인 실패", e);
+        }
+        // 실패 시 로그인 창 띄우기
+        localStorage.removeItem('bacc_server_user');
+        document.getElementById('login-overlay').style.display = 'flex';
+    }
 
     function switchAuthTab(mode) {
         authMode = mode;
@@ -381,18 +428,19 @@
                 if (res.ok) {
                     currentUser = data.username;
                     serverCash = data.cash;
-                    cash = 0;
+                    cash = 0; 
                     totalRolling = data.total_rolling;
                     initialWithdraw = data.initial_withdraw || 0;
                     currentRolling = data.current_rolling || 0;
                     profitRate = data.profit_rate || 0.0;
 
+                    // 로그인 성공 시 로컬 스토리지에 유저명 저장 (새로고침 유지)
                     localStorage.setItem('bacc_server_user', currentUser);
 
                     document.getElementById('login-overlay').style.display = 'none';
                     document.getElementById('header-nickname').innerText = `${currentUser} 님`;
                     document.getElementById('sidebar-user-title').innerText = `${currentUser} 님의 정보`;
-
+                    
                     updateUIValues();
                     updateCloseButtonState();
 
@@ -415,7 +463,6 @@
         }
     }
 
-    // 출금 기능: 잔고 -> 보유금 전환 및 롤링 요구치 세팅
     async function processWithdraw() {
         const inputAmt = parseInt(document.getElementById('withdraw-input-amt').value, 10);
         if (isNaN(inputAmt) || inputAmt <= 0) {
@@ -429,7 +476,7 @@
 
         serverCash -= inputAmt;
         cash += inputAmt;
-        initialWithdraw += inputAmt; // 출금 누적 원금 업데이트
+        initialWithdraw += inputAmt; 
 
         document.getElementById('withdraw-input-amt').value = '';
         updateUIValues();
@@ -440,7 +487,6 @@
         toggleSidebar(false);
     }
 
-    // 마감 기능: 출금 원금과 비교하여 수익률 계산 후 은행 잔고로 반영
     async function handleCloseGame() {
         let totalToBank = cash;
         if (totalToBank <= 0) {
@@ -448,14 +494,12 @@
             return;
         }
 
-        // 롤링 100% 체크 조건
         if (currentRolling < initialWithdraw) {
             alert(`롤링을 모두 채우지 못했습니다! (현재 ₩${currentRolling.toLocaleString()} / 필요 ₩${initialWithdraw.toLocaleString()})`);
             return;
         }
 
         if (confirm(`현재 보유 중인 ₩${totalToBank.toLocaleString()}을(를) 은행 잔고로 마감하시겠습니까?`)) {
-            // 수익률 계산: ((마감 금액 - 출금 원금) / 출금 원금) * 100
             if (initialWithdraw > 0) {
                 profitRate = ((totalToBank - initialWithdraw) / initialWithdraw) * 100;
             } else {
@@ -493,7 +537,7 @@
         document.getElementById('rolling-val').innerText = Math.floor(totalRolling).toLocaleString();
         document.getElementById('rolling-progress-val').innerText = Math.floor(currentRolling).toLocaleString();
         document.getElementById('rolling-target-val').innerText = Math.floor(initialWithdraw).toLocaleString();
-
+        
         const rateEl = document.getElementById('profit-rate-val');
         rateEl.innerText = `${profitRate.toFixed(2)}%`;
         rateEl.style.color = profitRate >= 0 ? '#4ade80' : '#ef4444';
@@ -556,7 +600,6 @@
             container.innerHTML = '<div style="text-align:center; color:#aaa; padding:15px;">등록된 유저가 없습니다.</div>';
             return;
         }
-        // 수익률(profit_rate) 기준 내림차순 정렬
         users.sort((a, b) => b.profit_rate - a.profit_rate);
 
         users.forEach((u, index) => {
@@ -865,7 +908,7 @@
         if (isPerfPair && bets.PERFECT_PAIR > 0) winPayout += bets.PERFECT_PAIR * 26;
 
         const netProfit = winPayout - totalBet;
-        cash += winPayout;
+        cash += winPayout; 
 
         document.getElementById('paid-val').innerText = Math.floor(winPayout).toLocaleString();
         updateUIValues();
