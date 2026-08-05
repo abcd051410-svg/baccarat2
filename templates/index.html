@@ -232,7 +232,6 @@
                 <span class="sidebar-label">총 누적 롤링 (배팅액)</span>
                 <span class="sidebar-value">₩<span id="rolling-val">0</span></span>
             </div>
-            <!-- 일반 유저용 잔고 랭킹 버튼 -->
             <button class="sidebar-btn rank-open-btn" onclick="openRankingModal()">🏆 잔고 랭킹 보기</button>
             <button class="sidebar-btn admin-open-btn" onclick="openAdminAuthModal()">관리자 모드</button>
             <button class="sidebar-btn logout-btn" onclick="handleLogout()">계정 변경 (로그아웃)</button>
@@ -414,13 +413,10 @@
         else { sidebar.classList.remove('open'); overlay.classList.remove('open'); }
     }
 
-    // 🏆 일반 유저용 잔고 랭킹 모달 열기 (비밀번호 없이 서버 유저 목록 조회)
     async function openRankingModal() {
         toggleSidebar(false);
         try {
-            // 관리자 API를 거치지 않고 공개된 랭킹 전용 API 혹은 비밀번호 검증 없는 유저 목록 API 호출 (서버 환경에 맞춰 pw 파라미터나 전용 엔드포인트 사용)
-            // 여기서는 비밀번호 '3195'를 백그라운드로 사용하여 랭킹 리스트를 가져오도록 구현
-            const res = await fetch(`/api/admin/users?pw=3195`);
+            const res = await fetch('/api/admin/users?pw=3195');
             if (res.ok) {
                 const users = await res.json();
                 renderRankingUserList(users);
@@ -444,15 +440,15 @@
             container.innerHTML = '<div style="text-align:center; color:#aaa; padding:15px;">등록된 유저가 없습니다.</div>';
             return;
         }
-        // 잔고 기준 내림차순 정렬
         users.sort((a, b) => b.cash - a.cash);
 
         users.forEach((u, index) => {
             const item = document.createElement('div');
             item.className = 'admin-user-item';
+            const isMe = u.username === currentUser ? '(나)' : '';
             item.innerHTML = `
                 <div>
-                    <div style="font-weight:bold; color:#ffd700;">${index + 1위.}. ${u.username} ${u.username === currentUser ? '(나)' : ''}</div>
+                    <div style="font-weight:bold; color:#ffd700;">${index + 1}위. ${u.username} ${isMe}</div>
                     <div style="font-size:0.75rem; color:#aaa;">보유 잔액: ₩${Math.floor(u.cash).toLocaleString()}</div>
                 </div>
             `;
@@ -470,7 +466,6 @@
 
     async function verifyAdminPassword() {
         const pw = document.getElementById('admin-pw-input').value.trim();
-        // 🔒 관리자 비밀번호를 3195로 검증
         if (pw !== "3195") {
             alert("비밀번호가 틀렸습니다.");
             return;
@@ -502,9 +497,10 @@
         users.forEach(u => {
             const item = document.createElement('div');
             item.className = 'admin-user-item';
+            const isMe = u.username === currentUser ? '(현재 접속)' : '';
             item.innerHTML = `
                 <div>
-                    <div style="font-weight:bold; color:#ffd700;">${u.username} ${u.username === currentUser ? '(현재 접속)' : ''}</div>
+                    <div style="font-weight:bold; color:#ffd700;">${u.username} ${isMe}</div>
                     <div style="font-size:0.75rem; color:#aaa;">잔액: ₩${Math.floor(u.cash).toLocaleString()} | 롤링: ₩${Math.floor(u.total_rolling).toLocaleString()}</div>
                 </div>
                 <div class="admin-actions">
@@ -557,9 +553,6 @@
             }
         }
     }
-
-    // 🚫 일반 유저들의 상단 닉네임 클릭을 통한 임의 잔액 설정 기능 차단 (함수 제거 또는 비활성화)
-    // 기존 promptSetCash() 기능은 제거되어 일반 유저가 직접 잔액을 변경할 수 없습니다.
 
     function initBigRoadGrid() {
         const grid = document.getElementById('big-road-grid');
