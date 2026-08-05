@@ -323,12 +323,9 @@
 
     window.onload = async () => {
         initBigRoadGrid();
-        
-        // 저장된 로그인 정보(아이디)가 있다면 자동 로그인 시도
         const savedUser = localStorage.getItem('bacc_server_user');
         if (savedUser) {
             document.getElementById('username-input').value = savedUser;
-            // 비밀번호는 저장하지 않으므로, 백엔드에서 세션 유효성 확인 대신 DB 데이터를 바로 조회해 자동으로 로그인 처리
             await autoLogin(savedUser);
         } else {
             document.getElementById('login-overlay').style.display = 'flex';
@@ -337,16 +334,14 @@
 
     async function autoLogin(username) {
         try {
-            // 비밀번호 검증 없이 유저 정보를 바로 가져오기 위한 API 호출 대신 기존 로그인 API 활용을 위해 비밀번호 입력을 받거나 세션 복구 처리
-            // 여기서는 localStorage에 저장된 유저명으로 서버에 데이터를 요청하여 자동 로그인 구현
-            const res = await fetch('/api/admin/users?pw=3195'); // 유저 정보 일괄 조회로 해당 유저 데이터 복구
+            const res = await fetch('/api/admin/users?pw=3195');
             if (res.ok) {
                 const users = await res.json();
                 const userObj = users.find(u => u.username === username);
                 if (userObj) {
                     currentUser = userObj.username;
                     serverCash = userObj.cash;
-                    cash = 0; 
+                    cash = userObj.game_cash || 0; 
                     totalRolling = userObj.total_rolling;
                     initialWithdraw = userObj.initial_withdraw || 0;
                     currentRolling = userObj.current_rolling || 0;
@@ -368,7 +363,6 @@
         } catch (e) {
             console.error("자동 로그인 실패", e);
         }
-        // 실패 시 로그인 창 띄우기
         localStorage.removeItem('bacc_server_user');
         document.getElementById('login-overlay').style.display = 'flex';
     }
@@ -428,13 +422,12 @@
                 if (res.ok) {
                     currentUser = data.username;
                     serverCash = data.cash;
-                    cash = 0; 
+                    cash = data.game_cash || 0; 
                     totalRolling = data.total_rolling;
                     initialWithdraw = data.initial_withdraw || 0;
                     currentRolling = data.current_rolling || 0;
                     profitRate = data.profit_rate || 0.0;
 
-                    // 로그인 성공 시 로컬 스토리지에 유저명 저장 (새로고침 유지)
                     localStorage.setItem('bacc_server_user', currentUser);
 
                     document.getElementById('login-overlay').style.display = 'none';
@@ -555,6 +548,7 @@
                 body: JSON.stringify({
                     username: currentUser,
                     cash: serverCash,
+                    game_cash: cash,
                     rolling_add: rollingAdd,
                     initial_withdraw: initialWithdraw,
                     current_rolling: currentRolling,
@@ -913,6 +907,9 @@
         document.getElementById('paid-val').innerText = Math.floor(winPayout).toLocaleString();
         updateUIValues();
 
+        // 게임 승패 결과 및 보유금 변경 즉시 서버 동기화
+        await updateServerData(0);
+
         showResultEffect(win, netProfit, totalBet);
         updateBigRoad(win, true);
     }
@@ -979,7 +976,7 @@
         return `${amount}`;
     }
 
-    function placeBet(type) {
+    async function placeBet(type) {
         if (!isBettingOpen) return;
         let betAmount = selectedChip === 'ALLIN' ? cash : selectedChip;
 
@@ -1001,9 +998,12 @@
             chipEl.style.display = 'flex';
             valEl.innerText = formatBetText(bets[type]);
         }
+
+        // 배팅 시점에도 보유금 변동 즉시 서버 반영
+        await updateServerData(0);
     }
 
-    function resetCurrentBets() {
+    async function resetCurrentBets() {
         if (!isBettingOpen) return;
         const totalBet = Object.values(bets).reduce((a, b) => a + b, 0);
         if (totalBet === 0) return;
@@ -1014,6 +1014,8 @@
         document.getElementById('cash-val').innerText = Math.floor(cash).toLocaleString();
         document.getElementById('bet-val').innerText = '0';
         document.querySelectorAll('.chip-placed').forEach(c => c.style.display = 'none');
+
+        await updateServerData(0);
     }
 
     function selectChip(val, el) {
