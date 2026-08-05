@@ -1,0 +1,835 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>BACCARAT CLASSIC - SERVER SYNC</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-tap-highlight-color: transparent; }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #0d0208;
+            color: #fff;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        .game-container {
+            width: 100%;
+            height: 100dvh;
+            background: radial-gradient(circle at 50% 20%, #581238 0%, #290419 60%, #12010a 100%);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            position: relative;
+            padding: calc(env(safe-area-inset-top) + 8px) 10px calc(env(safe-area-inset-bottom) + 8px) 10px;
+        }
+
+        .login-overlay, .admin-modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.85); z-index: 1000;
+            display: flex; align-items: center; justify-content: center; padding: 20px;
+        }
+        .login-card, .admin-card {
+            background: #1b0713; border: 2px solid #ffd700; border-radius: 12px;
+            padding: 24px; width: 100%; max-width: 340px; display: flex; flex-direction: column;
+            gap: 16px; box-shadow: 0 0 25px rgba(255, 215, 0, 0.3); text-align: center;
+        }
+        .login-title { font-size: 1.2rem; font-weight: bold; color: #ffd700; }
+        .login-input {
+            width: 100%; padding: 12px; background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 8px; color: #fff;
+            font-size: 1rem; text-align: center; outline: none;
+        }
+        .login-input:focus { border-color: #ffd700; }
+        .login-btn {
+            background: linear-gradient(135deg, #ffd700, #b8860b); color: #000;
+            border: none; padding: 12px; border-radius: 8px; font-weight: bold; font-size: 1rem; cursor: pointer;
+        }
+
+        .admin-card { max-width: 450px; max-height: 85vh; text-align: left; }
+        .admin-user-list {
+            max-height: 280px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding-right: 4px;
+        }
+        .admin-user-item {
+            background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+            padding: 10px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem;
+        }
+        .admin-actions { display: flex; gap: 4px; }
+        .admin-action-btn { padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; cursor: pointer; border: none; }
+        .btn-edit { background: #3b82f6; color: #fff; }
+        .btn-del { background: #ef4444; color: #fff; }
+
+        .header-bar { display: flex; justify-content: space-between; align-items: center; height: 36px; padding: 0 4px; z-index: 5; }
+        .header-title { font-size: 0.9rem; font-weight: 800; letter-spacing: 1px; color: #ffd700; cursor: pointer; display: flex; align-items: center; gap: 6px; }
+        .menu-btn { background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); color: #fff; padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: bold; cursor: pointer; }
+
+        .sidebar-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.6); z-index: 100; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
+        .sidebar-overlay.open { opacity: 1; pointer-events: auto; }
+        .sidebar { position: fixed; top: 0; right: -280px; width: 280px; height: 100%; background: #15050f; border-left: 1px solid #331225; z-index: 101; box-shadow: -5px 0 20px rgba(0,0,0,0.8); transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1); display: flex; flex-direction: column; padding: 20px; }
+        .sidebar.open { right: 0; }
+        .sidebar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #331225; padding-bottom: 10px; }
+        .sidebar-title { font-size: 1rem; font-weight: bold; color: #ffd700; }
+        .sidebar-close { background: none; border: none; color: #aaa; font-size: 1.2rem; cursor: pointer; }
+        .sidebar-content { display: flex; flex-direction: column; gap: 15px; }
+        .sidebar-item { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); padding: 12px; border-radius: 8px; display: flex; flex-direction: column; gap: 4px; }
+        .sidebar-label { font-size: 0.75rem; color: #aaa; }
+        .sidebar-value { font-size: 1.1rem; font-weight: bold; color: #ffd700; }
+
+        .sidebar-btn { padding: 10px; border-radius: 8px; font-weight: bold; cursor: pointer; text-align: center; border: none; }
+        .admin-open-btn { background: rgba(234, 179, 8, 0.2); border: 1px solid #eab308; color: #facc15; }
+        .logout-btn { background: rgba(239, 68, 68, 0.2); border: 1px solid #ef4444; color: #f87171; }
+
+        .stage-area { display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; position: relative; }
+        .status-capsule { background: rgba(0, 0, 0, 0.85); border: 1px solid #444; padding: 5px 20px; border-radius: 15px; font-weight: bold; font-size: 0.85rem; color: #ffd700; margin-bottom: 12px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.5); }
+
+        .hands-container { display: flex; width: 100%; justify-content: space-around; align-items: flex-start; margin-bottom: 5px; }
+        .hand-column { display: flex; flex-direction: column; align-items: center; width: 48%; }
+        .hand-label { font-size: 0.9rem; font-weight: bold; margin-bottom: 4px; display: flex; align-items: center; gap: 6px; }
+        .label-p { color: #60a5fa; }
+        .label-b { color: #f87171; }
+        .hand-score { font-size: 1.1rem; color: #fff; background: rgba(0,0,0,0.5); padding: 1px 8px; border-radius: 10px; }
+
+        .cards-box { display: flex; justify-content: center; gap: 4px; min-height: 90px; width: 100%; }
+        .card-wrapper { width: 54px; height: 82px; perspective: 1000px; animation: dealMove 0.4s ease-out forwards; }
+        @keyframes dealMove { from { transform: translateY(-30px) scale(0.7); opacity: 0; } to { transform: translateY(0) scale(1); opacity: 1; } }
+
+        .card-inner { width: 100%; height: 100%; position: relative; transform-style: preserve-3d; transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1); }
+        .card-wrapper.flipped .card-inner { transform: rotateY(180deg); }
+        .card-front, .card-back { width: 100%; height: 100%; position: absolute; backface-visibility: hidden; border-radius: 6px; box-shadow: 0 3px 6px rgba(0,0,0,0.5); }
+        .card-back { background: repeating-linear-gradient(45deg, #1d3557, #1d3557 6px, #457b9d 6px, #457b9d 12px); border: 2px solid #fff; }
+        .card-front { background: #fff; transform: rotateY(180deg); display: flex; flex-direction: column; justify-content: space-between; padding: 4px; font-weight: bold; font-size: 0.9rem; }
+        .card-front.red { color: #d90429; }
+        .card-front.black { color: #111; }
+
+        .result-overlay { position: absolute; top: 45%; left: 50%; transform: translate(-50%, -50%) scale(0.5); opacity: 0; pointer-events: none; z-index: 20; text-align: center; transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); width: 100%; }
+        .result-overlay.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+        .result-title { font-size: 2.5rem; font-weight: 900; font-style: italic; letter-spacing: 2px; }
+        .result-P { color: #60a5fa; text-shadow: 0 0 15px #2563eb; }
+        .result-B { color: #f87171; text-shadow: 0 0 15px #dc2626; }
+        .result-T { color: #4ade80; text-shadow: 0 0 15px #16a34a; }
+
+        .profit-popup { font-size: 1.5rem; font-weight: bold; margin-top: 4px; animation: floatUp 1s ease-out forwards; }
+        .profit-plus { color: #4ade80; text-shadow: 0 0 8px #16a34a; }
+        .profit-minus { color: #ef4444; text-shadow: 0 0 8px #991b1b; }
+        @keyframes floatUp { 0% { transform: translateY(5px); opacity: 0; } 20% { transform: translateY(0); opacity: 1; } 80% { transform: translateY(-5px); opacity: 1; } 100% { transform: translateY(-10px); opacity: 0; } }
+
+        .betting-table { width: 100%; display: flex; flex-direction: column; gap: 4px; margin-bottom: 6px; }
+        .pair-row { display: flex; gap: 4px; height: 36px; }
+        .pair-spot { flex: 1; background: rgba(30, 58, 138, 0.6); border: 1px solid rgba(96, 165, 250, 0.4); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 0.65rem; font-weight: bold; color: #93c5fd; cursor: pointer; position: relative; text-align: center; }
+        .pair-banker { background: rgba(153, 27, 27, 0.6); border-color: rgba(248, 113, 113, 0.4); color: #fca5a5; }
+        .pair-perfect { background: rgba(120, 53, 15, 0.6); border-color: rgba(251, 191, 36, 0.4); color: #fde68a; }
+
+        .main-bet-row { display: flex; gap: 4px; height: 110px; }
+        .bet-zone { flex: 1; padding: 8px; display: flex; flex-direction: column; justify-content: space-between; position: relative; cursor: pointer; border-radius: 8px; transition: background 0.2s; }
+        .bet-zone.disabled, .pair-spot.disabled { opacity: 0.7; pointer-events: none; }
+        .zone-player { background: rgba(29, 78, 216, 0.65); border: 1px solid #60a5fa; }
+        .zone-tie { flex: 0.7; background: rgba(20, 83, 45, 0.65); border: 1px solid #4ade80; text-align: center; }
+        .zone-banker { background: rgba(185, 28, 28, 0.65); border: 1px solid #f87171; text-align: right; }
+        .zone-title { font-size: 0.95rem; font-weight: bold; letter-spacing: 0.5px; }
+
+        .chip-placed { position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); background: rgba(0, 0, 0, 0.9); border: 1.5px solid #ffd700; color: #fff; font-size: 0.7rem; font-weight: 900; padding: 2px 6px; border-radius: 12px; display: none; align-items: center; gap: 2px; box-shadow: 0 0 6px rgba(255, 215, 0, 0.5); z-index: 3; white-space: nowrap; }
+        .chip-placed span { color: #ffe600; }
+
+        .chip-bar-wrapper { width: 100%; display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+        .chip-bar { flex: 1; display: flex; gap: 6px; overflow-x: auto; padding: 4px 2px; scrollbar-width: none; }
+        .chip-bar::-webkit-scrollbar { display: none; }
+        .chip-btn { min-width: 42px; height: 42px; border-radius: 50%; border: 2px dashed #fff; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 0.68rem; cursor: pointer; flex-shrink: 0; box-shadow: 0 2px 5px rgba(0,0,0,0.5); }
+        .chip-btn.active { border-style: solid; transform: scale(1.08); box-shadow: 0 0 10px #ffd700; }
+
+        .c-500 { background: #64748b; color: #fff; }
+        .c-1k { background: #0284c7; color: #fff; }
+        .c-5k { background: #0d9488; color: #fff; }
+        .c-10k { background: #2563eb; color: #fff; }
+        .c-50k { background: #059669; color: #fff; }
+        .c-100k { background: #d97706; color: #fff; }
+        .c-500k { background: #7c3aed; color: #fff; }
+        .c-allin { background: linear-gradient(135deg, #e11d48, #881337); color: #fff; border-style: solid; border-color: #f43f5e; }
+
+        .action-btns { display: flex; gap: 4px; flex-shrink: 0; }
+        .action-btn { height: 40px; padding: 0 8px; border-radius: 20px; color: #fff; font-weight: bold; font-size: 0.72rem; cursor: pointer; flex-shrink: 0; }
+        .reset-btn { background: linear-gradient(135deg, #ef4444, #991b1b); border: 1px solid #f87171; }
+
+        .bottom-panels { width: 100%; margin-bottom: 4px; }
+        .road-board { background: rgba(0, 0, 0, 0.85); border: 1px solid #333; border-radius: 6px; padding: 4px; position: relative; }
+        .big-road-grid { display: grid; grid-template-rows: repeat(6, 16px); grid-auto-flow: column; grid-auto-columns: 16px; gap: 1px; background: #181818; border: 1px solid #333; width: 100%; height: 104px; overflow-x: auto; scroll-behavior: smooth; }
+        .big-road-grid::-webkit-scrollbar { height: 4px; }
+        .big-road-grid::-webkit-scrollbar-thumb { background: #444; border-radius: 2px; }
+        .big-road-cell { width: 16px; height: 16px; background: #0d0d0d; display: flex; align-items: center; justify-content: center; }
+        .road-circle { width: 13px; height: 13px; border-radius: 50%; border: 2px solid; position: relative; }
+        .road-P { border-color: #2563eb; }
+        .road-B { border-color: #dc2626; }
+        .tie-line::after { content: ''; position: absolute; top: 4px; left: -2px; width: 13px; height: 2px; background: #16a34a; transform: rotate(-45deg); }
+
+        .control-bar { background: #000; border-top: 1px solid #222; padding: 6px 4px; font-size: 0.75rem; border-radius: 6px; }
+        .account-info { display: flex; justify-content: space-between; align-items: center; font-weight: bold; color: #aaa; }
+        .account-info span { color: #ffd700; }
+    </style>
+</head>
+<body>
+
+<div class="login-overlay" id="login-overlay">
+    <div class="login-card">
+        <div class="login-title">🎰 바카라 서버 연동 로그인</div>
+        <div style="font-size: 0.8rem; color: #aaa;">닉네임을 입력하세요. (서버 DB와 연동됩니다)</div>
+        <input type="text" id="username-input" class="login-input" placeholder="닉네임 입력 (예: 대영)" maxlength="10">
+        <button class="login-btn" onclick="handleLogin()">게임 시작</button>
+    </div>
+</div>
+
+<div class="admin-modal-overlay" id="admin-modal" style="display: none;">
+    <div class="admin-card" id="admin-login-card">
+        <div class="login-title" style="display:flex; justify-content:space-between; align-items:center;">
+            <span>관리자 모드 로그인</span>
+            <button onclick="closeAdminModal()" style="background:none; border:none; color:#aaa; font-size:1.2rem; cursor:pointer;">✕</button>
+        </div>
+        <div style="font-size: 0.8rem; color: #aaa;">관리자 비밀번호를 입력해주세요.</div>
+        <input type="password" id="admin-pw-input" class="login-input" placeholder="비밀번호 입력" maxlength="10">
+        <button class="login-btn" onclick="verifyAdminPassword()">확인</button>
+    </div>
+
+    <div class="admin-card" id="admin-panel-card" style="display: none;">
+        <div class="login-title" style="display:flex; justify-content:space-between; align-items:center;">
+            <span>🛠️ 서버 유저 관리 시스템</span>
+            <button onclick="closeAdminModal()" style="background:none; border:none; color:#aaa; font-size:1.2rem; cursor:pointer;">✕</button>
+        </div>
+        <div style="font-size: 0.8rem; color: #aaa;">서버 DB에 등록된 유저 목록 및 자산 관리</div>
+        <div class="admin-user-list" id="admin-user-list-container"></div>
+        <button class="login-btn" style="background: #374151; color: #fff;" onclick="closeAdminModal()">닫기</button>
+    </div>
+</div>
+
+<div class="game-container">
+    <div class="header-bar">
+        <div class="header-title" id="header-nickname" onclick="promptSetCash()">BACCARAT</div>
+        <button class="menu-btn" onclick="toggleSidebar(true)">메뉴</button>
+    </div>
+
+    <div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar(false)"></div>
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-title" id="sidebar-user-title">플레이어 정보</div>
+            <button class="sidebar-close" onclick="toggleSidebar(false)">✕</button>
+        </div>
+        <div class="sidebar-content">
+            <div class="sidebar-item">
+                <span class="sidebar-label">총 누적 롤링 (배팅액)</span>
+                <span class="sidebar-value">₩<span id="rolling-val">0</span></span>
+            </div>
+            <button class="sidebar-btn admin-open-btn" onclick="openAdminAuthModal()">관리자 모드</button>
+            <button class="sidebar-btn logout-btn" onclick="handleLogout()">계정 변경 (로그아웃)</button>
+        </div>
+    </div>
+
+    <div class="stage-area">
+        <div class="result-overlay" id="result-overlay">
+            <div class="result-title" id="result-title">PLAYER WIN</div>
+            <div id="profit-container"></div>
+        </div>
+
+        <div class="status-capsule" id="status-capsule">배팅을 진행해주세요 (10초)</div>
+
+        <div class="hands-container">
+            <div class="hand-column">
+                <div class="hand-label label-p">PLAYER <span class="hand-score" id="score-p">-</span></div>
+                <div class="cards-box" id="player-card-box"></div>
+            </div>
+            <div class="hand-column">
+                <div class="hand-label label-b">BANKER <span class="hand-score" id="score-b">-</span></div>
+                <div class="cards-box" id="banker-card-box"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="betting-table">
+        <div class="pair-row">
+            <div class="pair-spot" id="zone-P_PAIR" onclick="placeBet('P_PAIR')">
+                P.PAIR 11:1
+                <div class="chip-placed" id="chip-P_PAIR">🪙 <span id="val-P_PAIR">0</span></div>
+            </div>
+            <div class="pair-spot pair-perfect" id="zone-PERFECT_PAIR" onclick="placeBet('PERFECT_PAIR')">
+                PERFECT 25:1
+                <div class="chip-placed" id="chip-PERFECT_PAIR">🪙 <span id="val-PERFECT_PAIR">0</span></div>
+            </div>
+            <div class="pair-spot pair-banker" id="zone-B_PAIR" onclick="placeBet('B_PAIR')">
+                B.PAIR 11:1
+                <div class="chip-placed" id="chip-B_PAIR">🪙 <span id="val-B_PAIR">0</span></div>
+            </div>
+        </div>
+
+        <div class="main-bet-row">
+            <div class="bet-zone zone-player" id="zone-PLAYER" onclick="placeBet('PLAYER')">
+                <div class="zone-title" style="color: #60a5fa;">PLAYER<br><span style="font-size:0.7rem; font-weight:normal; color:#fff;">1:1</span></div>
+                <div class="chip-placed" id="chip-PLAYER">🪙 <span id="val-PLAYER">0</span></div>
+            </div>
+            <div class="bet-zone zone-tie" id="zone-TIE" onclick="placeBet('TIE')">
+                <div class="zone-title" style="color: #4ade80;">TIE<br><span style="font-size:0.7rem; font-weight:normal; color:#fff;">8:1</span></div>
+                <div class="chip-placed" id="chip-TIE">🪙 <span id="val-TIE">0</span></div>
+            </div>
+            <div class="bet-zone zone-banker" id="zone-BANKER" onclick="placeBet('BANKER')">
+                <div class="zone-title" style="color: #f87171;">BANKER<br><span style="font-size:0.7rem; font-weight:normal; color:#fff;">1:0.95</span></div>
+                <div class="chip-placed" id="chip-BANKER">🪙 <span id="val-BANKER">0</span></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="chip-bar-wrapper">
+        <div class="chip-bar">
+            <div class="chip-btn c-500 active" onclick="selectChip(500, this)">500</div>
+            <div class="chip-btn c-1k" onclick="selectChip(1000, this)">1천</div>
+            <div class="chip-btn c-5k" onclick="selectChip(5000, this)">5천</div>
+            <div class="chip-btn c-10k" onclick="selectChip(10000, this)">1만</div>
+            <div class="chip-btn c-50k" onclick="selectChip(50000, this)">5만</div>
+            <div class="chip-btn c-100k" onclick="selectChip(100000, this)">10만</div>
+            <div class="chip-btn c-500k" onclick="selectChip(500000, this)">50만</div>
+            <div class="chip-btn c-allin" onclick="selectChip('ALLIN', this)">ALL</div>
+        </div>
+        <div class="action-btns">
+            <button class="action-btn reset-btn" onclick="resetCurrentBets()">리셋</button>
+        </div>
+    </div>
+
+    <div class="bottom-panels">
+        <div class="road-board">
+            <div class="big-road-grid" id="big-road-grid"></div>
+        </div>
+    </div>
+
+    <div class="control-bar">
+        <div class="account-info">
+            <div>보유: ₩<span id="cash-val">50,000</span></div>
+            <div>배팅: ₩<span id="bet-val">0</span></div>
+            <div>획득: ₩<span id="paid-val">0</span></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let currentUser = null;
+    let cash = 50000;
+    let totalRolling = 0;
+    let selectedChip = 500;
+    let bets = { PLAYER: 0, BANKER: 0, TIE: 0, P_PAIR: 0, B_PAIR: 0, PERFECT_PAIR: 0 };
+    let isBettingOpen = false;
+
+    let lastWinner = null;
+    let currentCol = 0;
+    let currentRow = 0;
+    let roadMatrix = {};
+
+    const delay = (ms) => new Promise(res => setTimeout(res, ms));
+
+    window.onload = () => {
+        initBigRoadGrid();
+        const savedUser = localStorage.getItem('bacc_server_user');
+        if (savedUser) {
+            loginToServer(savedUser, true);
+        } else {
+            document.getElementById('login-overlay').style.display = 'flex';
+        }
+    };
+
+    async function handleLogin() {
+        const inputVal = document.getElementById('username-input').value.trim();
+        if (!inputVal) {
+            alert("유효한 닉네임을 입력해주세요.");
+            return;
+        }
+        await loginToServer(inputVal, false);
+    }
+
+    async function loginToServer(username, isAuto) {
+        try {
+            const res = await fetch('/api/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                currentUser = data.username;
+                cash = data.cash;
+                totalRolling = data.total_rolling;
+                localStorage.setItem('bacc_server_user', currentUser);
+
+                document.getElementById('login-overlay').style.display = 'none';
+                document.getElementById('header-nickname').innerText = `${currentUser} 님`;
+                document.getElementById('sidebar-user-title').innerText = `${currentUser} 님의 정보`;
+                document.getElementById('cash-val').innerText = Math.floor(cash).toLocaleString();
+                document.getElementById('rolling-val').innerText = Math.floor(totalRolling).toLocaleString();
+
+                initBigRoadGrid();
+                generateRandomHistory();
+                startLiveLoop();
+            } else {
+                alert(data.error || "로그인 실패");
+            }
+        } catch (e) {
+            alert("서버 연결에 실패했습니다.");
+        }
+    }
+
+    function handleLogout() {
+        if (confirm("계정을 변경하시겠습니까?")) {
+            localStorage.removeItem('bacc_server_user');
+            location.reload();
+        }
+    }
+
+    async function updateServerData(rollingAdd = 0) {
+        if (!currentUser) return;
+        try {
+            await fetch('/api/update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: currentUser, cash: cash, rolling_add: rollingAdd })
+            });
+        } catch (e) {
+            console.error("서버 동기화 실패");
+        }
+    }
+
+    function toggleSidebar(open) {
+        const sidebar = document.getElementById('sidebar');
+        const overlay = document.getElementById('sidebar-overlay');
+        if (open) { sidebar.classList.add('open'); overlay.classList.add('open'); }
+        else { sidebar.classList.remove('open'); overlay.classList.remove('open'); }
+    }
+
+    function openAdminAuthModal() {
+        toggleSidebar(false);
+        document.getElementById('admin-pw-input').value = '';
+        document.getElementById('admin-login-card').style.display = 'flex';
+        document.getElementById('admin-panel-card').style.display = 'none';
+        document.getElementById('admin-modal').style.display = 'flex';
+    }
+
+    async function verifyAdminPassword() {
+        const pw = document.getElementById('admin-pw-input').value.trim();
+        try {
+            const res = await fetch(`/api/admin/users?pw=${pw}`);
+            if (res.ok) {
+                const users = await res.json();
+                document.getElementById('admin-login-card').style.display = 'none';
+                document.getElementById('admin-panel-card').style.display = 'flex';
+                renderAdminUserList(users, pw);
+            } else {
+                alert("비밀번호가 틀렸습니다.");
+            }
+        } catch (e) {
+            alert("통신 오류 발생");
+        }
+    }
+
+    function closeAdminModal() { document.getElementById('admin-modal').style.display = 'none'; }
+
+    function renderAdminUserList(users, pw) {
+        const container = document.getElementById('admin-user-list-container');
+        container.innerHTML = '';
+        if (users.length === 0) {
+            container.innerHTML = '<div style="text-align:center; color:#aaa; padding:15px;">등록된 유저가 없습니다.</div>';
+            return;
+        }
+        users.forEach(u => {
+            const item = document.createElement('div');
+            item.className = 'admin-user-item';
+            item.innerHTML = `
+                <div>
+                    <div style="font-weight:bold; color:#ffd700;">${u.username} ${u.username === currentUser ? '(현재 접속)' : ''}</div>
+                    <div style="font-size:0.75rem; color:#aaa;">잔액: ₩${Math.floor(u.cash).toLocaleString()} | 롤링: ₩${Math.floor(u.total_rolling).toLocaleString()}</div>
+                </div>
+                <div class="admin-actions">
+                    <button class="admin-action-btn btn-edit" onclick="adminEditUser('${u.username}', '${pw}')">수정</button>
+                    <button class="admin-action-btn btn-del" onclick="adminDeleteUser('${u.username}', '${pw}')">삭제</button>
+                </div>
+            `;
+            container.appendChild(item);
+        });
+    }
+
+    async function adminEditUser(username, pw) {
+        const newCashInput = prompt(`[${username}] 수정할 잔액을 입력하세요:`);
+        if (newCashInput !== null) {
+            const newCash = parseInt(newCashInput, 10);
+            if (!isNaN(newCash) && newCash >= 0) {
+                const res = await fetch('/api/admin/edit', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pw, username, cash: newCash })
+                });
+                if (res.ok) {
+                    if (username === currentUser) {
+                        cash = newCash;
+                        document.getElementById('cash-val').innerText = Math.floor(cash).toLocaleString();
+                    }
+                    verifyAdminPassword();
+                }
+            } else {
+                alert("유효한 숫자를 입력하세요.");
+            }
+        }
+    }
+
+    async function adminDeleteUser(username, pw) {
+        if (confirm(`정말 [${username}] 유저를 삭제하시겠습니까?`)) {
+            const res = await fetch('/api/admin/delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ pw, username })
+            });
+            if (res.ok) {
+                if (username === currentUser) {
+                    localStorage.removeItem('bacc_server_user');
+                    alert("현재 계정이 삭제되어 새로고침합니다.");
+                    location.reload();
+                    return;
+                }
+                verifyAdminPassword();
+            }
+        }
+    }
+
+    async function promptSetCash() {
+        if (!isBettingOpen) {
+            alert("게임 진행 중에는 잔액을 변경할 수 없습니다.");
+            return;
+        }
+        const input = prompt(`[${currentUser}] 설정할 잔액을 입력하세요 (원):`, cash);
+        if (input !== null) {
+            const val = parseInt(input, 10);
+            if (!isNaN(val) && val >= 0) {
+                cash = val;
+                await updateServerData(0);
+                resetCurrentBets();
+                document.getElementById('cash-val').innerText = cash.toLocaleString();
+            } else {
+                alert("올바른 금액을 입력하세요.");
+            }
+        }
+    }
+
+    function initBigRoadGrid() {
+        const grid = document.getElementById('big-road-grid');
+        grid.innerHTML = '';
+        for (let c = 0; c < 50; c++) {
+            for (let r = 0; r < 6; r++) {
+                const cell = document.createElement('div');
+                cell.className = 'big-road-cell';
+                cell.id = `cell_${c}_${r}`;
+                grid.appendChild(cell);
+            }
+        }
+    }
+
+    function generateRandomHistory() {
+        const totalRounds = Math.floor(Math.random() * 16) + 25;
+        for (let i = 0; i < totalRounds; i++) {
+            let rand = Math.random();
+            let res = 'PLAYER';
+            if (rand > 0.88) res = 'TIE';
+            else if (rand > 0.48) res = 'BANKER';
+            updateBigRoad(res, false);
+        }
+        scrollToLatestRoad();
+    }
+
+    function scrollToLatestRoad() {
+        const grid = document.getElementById('big-road-grid');
+        if (currentCol > 12) grid.scrollLeft = (currentCol - 10) * 17;
+        else grid.scrollLeft = 0;
+    }
+
+    async function startLiveLoop() {
+        while (true) {
+            resetBoard();
+            isBettingOpen = true;
+            setZoneDisabled(false);
+
+            let timeLeft = 10;
+            while (timeLeft > 0) {
+                document.getElementById('status-capsule').innerText = `배팅 진행 중 (${timeLeft}초)`;
+                await delay(1000);
+                timeLeft--;
+            }
+
+            isBettingOpen = false;
+            setZoneDisabled(true);
+            document.getElementById('status-capsule').innerText = "배팅 마감 - 딜링 중";
+            await delay(500);
+
+            const currentRoundBet = Object.values(bets).reduce((a, b) => a + b, 0);
+            if (currentRoundBet > 0) {
+                await updateServerData(currentRoundBet);
+                rollingValUpdate(currentRoundBet);
+            }
+
+            await runBaccaratGame();
+            await delay(3700);
+        }
+    }
+
+    function rollingValUpdate(add) {
+        totalRolling += add;
+        document.getElementById('rolling-val').innerText = Math.floor(totalRolling).toLocaleString();
+    }
+
+    function createDeck() {
+        const suits = ['♠', '♥', '♦', '♣'];
+        const ranks = [
+            { n: 'A', v: 1 }, { n: '2', v: 2 }, { n: '3', v: 3 }, { n: '4', v: 4 },
+            { n: '5', v: 5 }, { n: '6', v: 6 }, { n: '7', v: 7 }, { n: '8', v: 8 },
+            { n: '9', v: 9 }, { n: '10', v: 0 }, { n: 'J', v: 0 }, { n: 'Q', v: 0 }, { n: 'K', v: 0 }
+        ];
+        let deck = [];
+        for (let i = 0; i < 8; i++) {
+            for (let s of suits) {
+                for (let r of ranks) deck.push({ suit: s, name: r.n, val: r.v });
+            }
+        }
+        return deck.sort(() => Math.random() - 0.5);
+    }
+
+    function getScore(hand) { return hand.reduce((a, c) => a + c.val, 0) % 10; }
+
+    function createCardElement(card) {
+        const isRed = card.suit === '♥' || card.suit === '♦';
+        const wrapper = document.createElement('div');
+        wrapper.className = 'card-wrapper';
+        wrapper.innerHTML = `
+        <div class="card-inner">
+          <div class="card-back"></div>
+          <div class="card-front ${isRed ? 'red' : 'black'}">
+            <div>${card.name}</div>
+            <div style="text-align:center; font-size:1.1rem;">${card.suit}</div>
+            <div style="text-align:right;">${card.name}</div>
+          </div>
+        </div>`;
+        return wrapper;
+    }
+
+    function shouldBankerDraw(bankerScore, playerThirdCardValue) {
+        if (playerThirdCardValue === null) return bankerScore <= 5;
+        const p3 = playerThirdCardValue;
+        if (bankerScore <= 2) return true;
+        if (bankerScore === 3) return p3 !== 8;
+        if (bankerScore === 4) return [2, 3, 4, 5, 6, 7].includes(p3);
+        if (bankerScore === 5) return [4, 5, 6, 7].includes(p3);
+        if (bankerScore === 6) return [6, 7].includes(p3);
+        return false;
+    }
+
+    async function runBaccaratGame() {
+        const deck = createDeck();
+        const pBox = document.getElementById('player-card-box');
+        const bBox = document.getElementById('banker-card-box');
+        pBox.innerHTML = ''; bBox.innerHTML = '';
+
+        let pHand = [deck.pop(), deck.pop()];
+        let bHand = [deck.pop(), deck.pop()];
+
+        const p1El = createCardElement(pHand[0]); pBox.appendChild(p1El); await delay(350);
+        const b1El = createCardElement(bHand[0]); bBox.appendChild(b1El); await delay(350);
+        const p2El = createCardElement(pHand[1]); pBox.appendChild(p2El); await delay(350);
+        const b2El = createCardElement(bHand[1]); bBox.appendChild(b2El); await delay(500);
+
+        document.getElementById('status-capsule').innerText = "카드 오픈";
+
+        p1El.classList.add('flipped'); await delay(400);
+        document.getElementById('score-p').innerText = getScore([pHand[0]]); await delay(500);
+        b1El.classList.add('flipped'); await delay(400);
+        document.getElementById('score-b').innerText = getScore([bHand[0]]); await delay(500);
+        p2El.classList.add('flipped'); await delay(400);
+        let pScore = getScore(pHand);
+        document.getElementById('score-p').innerText = pScore; await delay(500);
+        b2El.classList.add('flipped'); await delay(400);
+        let bScore = getScore(bHand);
+        document.getElementById('score-b').innerText = bScore; await delay(600);
+
+        if (pScore < 8 && bScore < 8) {
+            let p3Card = null;
+            if (pScore <= 5) {
+                document.getElementById('status-capsule').innerText = "PLAYER 3번째 카드";
+                await delay(400);
+                p3Card = deck.pop(); pHand.push(p3Card);
+                const p3El = createCardElement(p3Card); pBox.appendChild(p3El); await delay(450);
+                p3El.classList.add('flipped'); await delay(400);
+                pScore = getScore(pHand);
+                document.getElementById('score-p').innerText = pScore; await delay(600);
+            }
+
+            const p3Val = p3Card ? p3Card.val : null;
+            if (shouldBankerDraw(bScore, p3Val)) {
+                document.getElementById('status-capsule').innerText = "BANKER 3번째 카드";
+                await delay(400);
+                const b3Card = deck.pop(); bHand.push(b3Card);
+                const b3El = createCardElement(b3Card); bBox.appendChild(b3El); await delay(450);
+                b3El.classList.add('flipped'); await delay(400);
+                bScore = getScore(bHand);
+                document.getElementById('score-b').innerText = bScore; await delay(600);
+            }
+        }
+
+        settleRound(pScore, bScore, pHand, bHand);
+    }
+
+    async function settleRound(pScore, bScore, pHand, bHand) {
+        let win = 'TIE';
+        if (pScore > bScore) win = 'PLAYER';
+        else if (bScore > pScore) win = 'BANKER';
+
+        const isPPair = pHand[0].name === pHand[1].name;
+        const isBPair = bHand[0].name === bHand[1].name;
+        const isPerfPair = (isPPair && pHand[0].suit === pHand[1].suit) || (isBPair && bHand[0].suit === bHand[1].suit);
+
+        const totalBet = Object.values(bets).reduce((a, b) => a + b, 0);
+        let winPayout = 0;
+
+        if (win === 'PLAYER' && bets.PLAYER > 0) winPayout += bets.PLAYER * 2;
+        else if (win === 'BANKER' && bets.BANKER > 0) winPayout += bets.BANKER * 1.95;
+        else if (win === 'TIE') {
+            if (bets.TIE > 0) winPayout += bets.TIE * 9;
+            winPayout += bets.PLAYER + bets.BANKER;
+        }
+
+        if (isPPair && bets.P_PAIR > 0) winPayout += bets.P_PAIR * 12;
+        if (isBPair && bets.B_PAIR > 0) winPayout += bets.B_PAIR * 12;
+        if (isPerfPair && bets.PERFECT_PAIR > 0) winPayout += bets.PERFECT_PAIR * 26;
+
+        const netProfit = winPayout - totalBet;
+        cash += winPayout;
+        await updateServerData(0);
+
+        document.getElementById('paid-val').innerText = Math.floor(winPayout).toLocaleString();
+        document.getElementById('cash-val').innerText = Math.floor(cash).toLocaleString();
+
+        showResultEffect(win, netProfit, totalBet);
+        updateBigRoad(win, true);
+    }
+
+    function updateBigRoad(result, autoScroll = true) {
+        if (result === 'TIE') {
+            if (lastWinner !== null) {
+                const targetCell = document.getElementById(`cell_${currentCol}_${currentRow}`);
+                if (targetCell && targetCell.firstChild) targetCell.firstChild.classList.add('tie-line');
+            }
+            return;
+        }
+
+        if (lastWinner === null) { currentCol = 0; currentRow = 0; }
+        else if (lastWinner === result) {
+            if (currentRow < 5 && !roadMatrix[`${currentCol}_${currentRow + 1}`]) currentRow++;
+            else currentCol++;
+        } else {
+            currentCol++; currentRow = 0;
+            while (roadMatrix[`${currentCol}_${currentRow}`]) currentCol++;
+        }
+
+        lastWinner = result;
+        roadMatrix[`${currentCol}_${currentRow}`] = { winner: result };
+
+        const cell = document.getElementById(`cell_${currentCol}_${currentRow}`);
+        if (cell) {
+            const circle = document.createElement('div');
+            circle.className = `road-circle ${result === 'PLAYER' ? 'road-P' : 'road-B'}`;
+            cell.appendChild(circle);
+            if (autoScroll) scrollToLatestRoad();
+        }
+    }
+
+    function showResultEffect(win, netProfit, totalBet) {
+        const overlay = document.getElementById('result-overlay');
+        const title = document.getElementById('result-title');
+        const profitContainer = document.getElementById('profit-container');
+
+        title.className = `result-title result-${win[0]}`;
+        title.innerText = `${win} WIN!`;
+
+        profitContainer.innerHTML = '';
+        if (totalBet > 0) {
+            const pop = document.createElement('div');
+            pop.className = `profit-popup ${netProfit >= 0 ? 'profit-plus' : 'profit-minus'}`;
+            pop.innerText = netProfit >= 0 ? `+₩${Math.floor(netProfit).toLocaleString()}` : `-₩${Math.floor(Math.abs(netProfit)).toLocaleString()}`;
+            profitContainer.appendChild(pop);
+        }
+
+        overlay.classList.add('show');
+        document.getElementById('status-capsule').innerText = `${win} 승리!`;
+        setTimeout(() => overlay.classList.remove('show'), 1800);
+    }
+
+    function formatBetText(amount) {
+        if (amount >= 10000) {
+            const wan = amount / 10000;
+            return Number.isInteger(wan) ? `${wan}만` : `${wan.toFixed(1)}만`;
+        } else if (amount >= 1000) {
+            const cheon = amount / 1000;
+            return Number.isInteger(cheon) ? `${cheon}천` : `${cheon.toFixed(1)}천`;
+        }
+        return `${amount}`;
+    }
+
+    function placeBet(type) {
+        if (!isBettingOpen) return;
+        let betAmount = selectedChip === 'ALLIN' ? cash : selectedChip;
+
+        if (cash < betAmount || betAmount <= 0) {
+            alert("잔액이 부족합니다.");
+            return;
+        }
+
+        cash -= betAmount;
+        bets[type] = (bets[type] || 0) + betAmount;
+
+        const totalBet = Object.values(bets).reduce((a, b) => a + b, 0);
+        document.getElementById('cash-val').innerText = Math.floor(cash).toLocaleString();
+        document.getElementById('bet-val').innerText = Math.floor(totalBet).toLocaleString();
+
+        const chipEl = document.getElementById(`chip-${type}`);
+        const valEl = document.getElementById(`val-${type}`);
+        if (chipEl && valEl) {
+            chipEl.style.display = 'flex';
+            valEl.innerText = formatBetText(bets[type]);
+        }
+    }
+
+    function resetCurrentBets() {
+        if (!isBettingOpen) return;
+        const totalBet = Object.values(bets).reduce((a, b) => a + b, 0);
+        if (totalBet === 0) return;
+
+        cash += totalBet;
+        bets = { PLAYER: 0, BANKER: 0, TIE: 0, P_PAIR: 0, B_PAIR: 0, PERFECT_PAIR: 0 };
+
+        document.getElementById('cash-val').innerText = Math.floor(cash).toLocaleString();
+        document.getElementById('bet-val').innerText = '0';
+        document.querySelectorAll('.chip-placed').forEach(c => c.style.display = 'none');
+    }
+
+    function selectChip(val, el) {
+        selectedChip = val;
+        document.querySelectorAll('.chip-btn').forEach(c => c.classList.remove('active'));
+        el.classList.add('active');
+    }
+
+    function setZoneDisabled(disabled) {
+        document.querySelectorAll('.bet-zone, .pair-spot').forEach(z => {
+            if (disabled) z.classList.add('disabled');
+            else z.classList.remove('disabled');
+        });
+    }
+
+    function resetBoard() {
+        bets = { PLAYER: 0, BANKER: 0, TIE: 0, P_PAIR: 0, B_PAIR: 0, PERFECT_PAIR: 0 };
+        document.getElementById('player-card-box').innerHTML = '';
+        document.getElementById('banker-card-box').innerHTML = '';
+        document.getElementById('score-p').innerText = '-';
+        document.getElementById('score-b').innerText = '-';
+        document.getElementById('bet-val').innerText = '0';
+        document.getElementById('paid-val').innerText = '0';
+        document.querySelectorAll('.chip-placed').forEach(c => c.style.display = 'none');
+    }
+</script>
+</body>
+</html>
