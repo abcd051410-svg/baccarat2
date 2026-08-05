@@ -291,7 +291,6 @@
         initBigRoadGrid();
         const savedUser = localStorage.getItem('bacc_server_user');
         if (savedUser) {
-            // 자동 로그인을 위해 비밀번호가 없으므로 다시 로그인창 띄우기 (또는 토큰 방식 대신 재로그인 유도)
             document.getElementById('login-overlay').style.display = 'flex';
         } else {
             document.getElementById('login-overlay').style.display = 'flex';
