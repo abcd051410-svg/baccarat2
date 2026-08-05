@@ -9,11 +9,14 @@
         html, body { width: 100%; height: 100%; overflow: hidden; background: #0d0208; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
         .game-container { width: 100%; height: 100dvh; background: radial-gradient(circle at 50% 20%, #581238 0%, #290419 60%, #12010a 100%); display: flex; flex-direction: column; justify-content: space-between; position: relative; padding: calc(env(safe-area-inset-top) + 8px) 10px calc(env(safe-area-inset-bottom) + 8px) 10px; }
         .login-overlay, .admin-modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.85); z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 20px; }
-        .login-card, .admin-card { background: #1b0713; border: 2px solid #ffd700; border-radius: 12px; padding: 24px; width: 100%; max-width: 340px; display: flex; flex-direction: column; gap: 16px; box-shadow: 0 0 25px rgba(255, 215, 0, 0.3); text-align: center; }
+        .login-card, .admin-card { background: #1b0713; border: 2px solid #ffd700; border-radius: 12px; padding: 24px; width: 100%; max-width: 340px; display: flex; flex-direction: column; gap: 14px; box-shadow: 0 0 25px rgba(255, 215, 0, 0.3); text-align: center; }
         .login-title { font-size: 1.2rem; font-weight: bold; color: #ffd700; }
         .login-input { width: 100%; padding: 12px; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 8px; color: #fff; font-size: 1rem; text-align: center; outline: none; }
         .login-input:focus { border-color: #ffd700; }
         .login-btn { background: linear-gradient(135deg, #ffd700, #b8860b); color: #000; border: none; padding: 12px; border-radius: 8px; font-weight: bold; font-size: 1rem; cursor: pointer; }
+        .tab-row { display: flex; gap: 6px; margin-bottom: 4px; }
+        .tab-btn { flex: 1; padding: 8px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #aaa; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.85rem; }
+        .tab-btn.active { background: rgba(255, 215, 0, 0.2); border-color: #ffd700; color: #ffd700; }
         .admin-card { max-width: 450px; max-height: 85vh; text-align: left; }
         .admin-user-list { max-height: 280px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding-right: 4px; }
         .admin-user-item { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); padding: 10px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; }
@@ -116,10 +119,14 @@
 
 <div class="login-overlay" id="login-overlay">
     <div class="login-card">
-        <div class="login-title">🎰 바카라 서버 연동 로그인</div>
-        <div style="font-size: 0.8rem; color: #aaa;">닉네임을 입력하세요. (서버 DB와 연동됩니다)</div>
-        <input type="text" id="username-input" class="login-input" placeholder="닉네임 입력 (예: 대영)" maxlength="10">
-        <button class="login-btn" onclick="handleLogin()">게임 시작</button>
+        <div class="login-title">🎰 바카라 로그인 / 회원가입</div>
+        <div class="tab-row">
+            <button class="tab-btn active" id="tab-login-btn" onclick="switchAuthTab('login')">로그인</button>
+            <button class="tab-btn" id="tab-reg-btn" onclick="switchAuthTab('register')">회원가입</button>
+        </div>
+        <input type="text" id="username-input" class="login-input" placeholder="아이디 입력" maxlength="12">
+        <input type="password" id="password-input" class="login-input" placeholder="비밀번호 입력" maxlength="20">
+        <button class="login-btn" id="auth-submit-btn" onclick="handleLogin()">로그인</button>
     </div>
 </div>
 
@@ -176,7 +183,7 @@
             </div>
             <button class="sidebar-btn rank-open-btn" onclick="openRankingModal()">🏆 잔고 랭킹 보기</button>
             <button class="sidebar-btn admin-open-btn" onclick="openAdminAuthModal()">관리자 모드</button>
-            <button class="sidebar-btn logout-btn" onclick="handleLogout()">계정 변경 (로그아웃)</button>
+            <button class="sidebar-btn logout-btn" onclick="handleLogout()">로그아웃</button>
         </div>
     </div>
 
@@ -271,6 +278,8 @@
     let bets = { PLAYER: 0, BANKER: 0, TIE: 0, P_PAIR: 0, B_PAIR: 0, PERFECT_PAIR: 0 };
     let isBettingOpen = false;
 
+    let authMode = 'login'; // 'login' or 'register'
+
     let lastWinner = null;
     let currentCol = 0;
     let currentRow = 0;
@@ -282,55 +291,90 @@
         initBigRoadGrid();
         const savedUser = localStorage.getItem('bacc_server_user');
         if (savedUser) {
-            loginToServer(savedUser, true);
+            // 자동 로그인을 위해 비밀번호가 없으므로 다시 로그인창 띄우기 (또는 토큰 방식 대신 재로그인 유도)
+            document.getElementById('login-overlay').style.display = 'flex';
         } else {
             document.getElementById('login-overlay').style.display = 'flex';
         }
     };
 
-    async function handleLogin() {
-        const inputVal = document.getElementById('username-input').value.trim();
-        if (!inputVal) {
-            alert("유효한 닉네임을 입력해주세요.");
-            return;
+    function switchAuthTab(mode) {
+        authMode = mode;
+        const loginBtnTab = document.getElementById('tab-login-btn');
+        const regBtnTab = document.getElementById('tab-reg-btn');
+        const submitBtn = document.getElementById('auth-submit-btn');
+
+        if (mode === 'login') {
+            loginBtnTab.classList.add('active');
+            regBtnTab.classList.remove('active');
+            submitBtn.innerText = '로그인';
+        } else {
+            regBtnTab.classList.add('active');
+            loginBtnTab.classList.remove('active');
+            submitBtn.innerText = '회원가입 완료';
         }
-        await loginToServer(inputVal, false);
     }
 
-    async function loginToServer(username, isAuto) {
-        try {
-            const res = await fetch('/api/login', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username })
-            });
-            const data = await res.json();
-            if (res.ok) {
-                currentUser = data.username;
-                cash = data.cash;
-                totalRolling = data.total_rolling;
-                localStorage.setItem('bacc_server_user', currentUser);
+    async function handleLogin() {
+        const username = document.getElementById('username-input').value.trim();
+        const password = document.getElementById('password-input').value.trim();
 
-                document.getElementById('login-overlay').style.display = 'none';
-                document.getElementById('header-nickname').innerText = `${currentUser} 님`;
-                document.getElementById('sidebar-user-title').innerText = `${currentUser} 님의 정보`;
-                document.getElementById('cash-val').innerText = Math.floor(cash).toLocaleString();
-                document.getElementById('rolling-val').innerText = Math.floor(totalRolling).toLocaleString();
+        if (!username || !password) {
+            alert("아이디와 비밀번호를 모두 입력해주세요.");
+            return;
+        }
 
-                initBigRoadGrid();
-                generateRandomHistory();
-                startLiveLoop();
-            } else {
-                alert(data.error || "로그인 실패");
+        if (authMode === 'register') {
+            try {
+                const res = await fetch('/api/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    alert("회원가입이 완료되었습니다! 로그인해 주세요.");
+                    switchAuthTab('login');
+                    document.getElementById('password-input').value = '';
+                } else {
+                    alert(data.error || "회원가입 실패");
+                }
+            } catch (e) {
+                alert("서버 통신 오류");
             }
-        } catch (e) {
-            alert("서버 연결에 실패했습니다.");
+        } else {
+            try {
+                const res = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    currentUser = data.username;
+                    cash = data.cash;
+                    totalRolling = data.total_rolling;
+
+                    document.getElementById('login-overlay').style.display = 'none';
+                    document.getElementById('header-nickname').innerText = `${currentUser} 님`;
+                    document.getElementById('sidebar-user-title').innerText = `${currentUser} 님의 정보`;
+                    document.getElementById('cash-val').innerText = Math.floor(cash).toLocaleString();
+                    document.getElementById('rolling-val').innerText = Math.floor(totalRolling).toLocaleString();
+
+                    initBigRoadGrid();
+                    generateRandomHistory();
+                    startLiveLoop();
+                } else {
+                    alert(data.error || "로그인 실패");
+                }
+            } catch (e) {
+                alert("서버 연결에 실패했습니다.");
+            }
         }
     }
 
     function handleLogout() {
-        if (confirm("계정을 변경하시겠습니까?")) {
-            localStorage.removeItem('bacc_server_user');
+        if (confirm("로그아웃 하시겠습니까?")) {
             location.reload();
         }
     }
@@ -467,13 +511,12 @@
                     });
                     const data = await res.json();
                     if (res.ok && data.success) {
-                        // 본인 계정을 수정했을 경우 화면의 보유 잔액도 즉시 동기화
                         if (username === currentUser) {
                             cash = newCash;
                             document.getElementById('cash-val').innerText = Math.floor(cash).toLocaleString();
                         }
                         alert(`[${username}] 유저의 잔액이 ₩${newCash.toLocaleString()}(으)로 수정되었습니다.`);
-                        verifyAdminPassword(); // 관리자 목록 새로고침
+                        verifyAdminPassword();
                     } else {
                         alert("잔액 수정에 실패했습니다.");
                     }
@@ -495,7 +538,6 @@
             });
             if (res.ok) {
                 if (username === currentUser) {
-                    localStorage.removeItem('bacc_server_user');
                     alert("현재 계정이 삭제되어 새로고침합니다.");
                     location.reload();
                     return;

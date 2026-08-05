@@ -11,6 +11,7 @@ def init_db():
   cursor.execute("""
                  CREATE TABLE IF NOT EXISTS users (
                                                     username TEXT PRIMARY KEY,
+                                                    password TEXT NOT NULL,
                                                     cash INTEGER DEFAULT 50000,
                                                     total_rolling INTEGER DEFAULT 0
                  )
@@ -19,33 +20,65 @@ def init_db():
   conn.close()
 
 
-# 유저 로그인/조회
+# 회원가입 API
+@app.route("/api/register", methods=["POST"])
+def register():
+  data = request.json
+  username = data.get("username", "").strip()
+  password = data.get("password", "").strip()
+
+  if not username or not password:
+    return jsonify({"error": "아이디와 비밀번호를 모두 입력해주세요."}), 400
+
+  conn = sqlite3.connect(DB_NAME)
+  cursor = conn.cursor()
+
+  cursor.execute("SELECT username FROM users WHERE username = ?", (username,))
+  if cursor.fetchone():
+    conn.close()
+    return jsonify({"error": "이미 존재하는 아이디입니다."}), 400
+
+  cursor.execute(
+    "INSERT INTO users (username, password, cash, total_rolling) VALUES (?,"
+    " ?, 50000, 0)",
+    (username, password),
+  )
+  conn.commit()
+  conn.close()
+  return jsonify({"success": True, "message": "회원가입이 완료되었습니다."})
+
+
+# 로그인 API
 @app.route("/api/login", methods=["POST"])
 def login():
   data = request.json
   username = data.get("username", "").strip()
-  if not username:
-    return jsonify({"error": "Invalid username"}), 400
+  password = data.get("password", "").strip()
+
+  if not username or not password:
+    return jsonify({"error": "아이디와 비밀번호를 모두 입력해주세요."}), 400
 
   conn = sqlite3.connect(DB_NAME)
   cursor = conn.cursor()
   cursor.execute(
-    "SELECT cash, total_rolling FROM users WHERE username = ?", (username,)
+    "SELECT password, cash, total_rolling FROM users WHERE username = ?",
+    (username,),
   )
   row = cursor.fetchone()
 
-  if row:
-    cash, total_rolling = row
-  else:
-    cash, total_rolling = 50000, 0
-    cursor.execute(
-      "INSERT INTO users (username, cash, total_rolling) VALUES (?, ?, ?)",
-      (username, cash, total_rolling),
-    )
-    conn.commit()
+  if not row:
+    conn.close()
+    return jsonify({"error": "존재하지 않는 아이디입니다."}), 400
+
+  db_password, cash, total_rolling = row
+  if db_password != password:
+    conn.close()
+    return jsonify({"error": "비밀번호가 일치하지 않습니다."}), 400
 
   conn.close()
-  return jsonify({"username": username, "cash": cash, "total_rolling": total_rolling})
+  return jsonify(
+    {"username": username, "cash": cash, "total_rolling": total_rolling}
+  )
 
 
 # 유저 데이터 업데이트 (배팅 및 잔액 변동)
@@ -91,19 +124,21 @@ def admin_get_users():
 
 
 # 관리자: 유저 잔액 수정
-@app.route('/api/admin/edit', methods=['POST'])
+@app.route("/api/admin/edit", methods=["POST"])
 def admin_edit_user():
   data = request.json
-  pw = data.get('pw')
-  username = data.get('username')
-  new_cash = data.get('cash')
+  pw = data.get("pw")
+  username = data.get("username")
+  new_cash = data.get("cash")
 
   if pw != "3195":
     return jsonify({"error": "Unauthorized"}), 401
 
   conn = sqlite3.connect(DB_NAME)
   cursor = conn.cursor()
-  cursor.execute('UPDATE users SET cash = ? WHERE username = ?', (new_cash, username))
+  cursor.execute(
+    "UPDATE users SET cash = ? WHERE username = ?", (new_cash, username)
+  )
   conn.commit()
   conn.close()
 
