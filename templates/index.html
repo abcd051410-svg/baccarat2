@@ -29,19 +29,22 @@
         .menu-btn { background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); color: #fff; padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: bold; cursor: pointer; }
         .sidebar-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.6); z-index: 100; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
         .sidebar-overlay.open { opacity: 1; pointer-events: auto; }
-        .sidebar { position: fixed; top: 0; right: -280px; width: 280px; height: 100%; background: #15050f; border-left: 1px solid #331225; z-index: 101; box-shadow: -5px 0 20px rgba(0,0,0,0.8); transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1); display: flex; flex-direction: column; padding: 20px; }
+        .sidebar { position: fixed; top: 0; right: -280px; width: 280px; height: 100%; background: #15050f; border-left: 1px solid #331225; z-index: 101; box-shadow: -5px 0 20px rgba(0,0,0,0.8); transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1); display: flex; flex-direction: column; padding: 20px; overflow-y: auto; }
         .sidebar.open { right: 0; }
-        .sidebar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #331225; padding-bottom: 10px; }
+        .sidebar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 1px solid #331225; padding-bottom: 10px; }
         .sidebar-title { font-size: 1rem; font-weight: bold; color: #ffd700; }
         .sidebar-close { background: none; border: none; color: #aaa; font-size: 1.2rem; cursor: pointer; }
-        .sidebar-content { display: flex; flex-direction: column; gap: 15px; }
-        .sidebar-item { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); padding: 12px; border-radius: 8px; display: flex; flex-direction: column; gap: 4px; }
+        .sidebar-content { display: flex; flex-direction: column; gap: 12px; }
+        .sidebar-item { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); padding: 10px; border-radius: 8px; display: flex; flex-direction: column; gap: 4px; }
         .sidebar-label { font-size: 0.75rem; color: #aaa; }
-        .sidebar-value { font-size: 1.1rem; font-weight: bold; color: #ffd700; }
+        .sidebar-value { font-size: 1.05rem; font-weight: bold; color: #ffd700; }
         .sidebar-btn { padding: 10px; border-radius: 8px; font-weight: bold; cursor: pointer; text-align: center; border: none; }
         .rank-open-btn { background: rgba(59, 130, 246, 0.2); border: 1px solid #3b82f6; color: #60a5fa; }
         .admin-open-btn { background: rgba(234, 179, 8, 0.2); border: 1px solid #eab308; color: #facc15; }
         .logout-btn { background: rgba(239, 68, 68, 0.2); border: 1px solid #ef4444; color: #f87171; }
+        .withdraw-box { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+        .withdraw-input { width: 100%; padding: 8px; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; color: #fff; font-size: 0.9rem; text-align: right; outline: none; }
+        .withdraw-btn { background: linear-gradient(135deg, #10b981, #047857); color: #fff; border: none; padding: 8px; border-radius: 6px; font-weight: bold; font-size: 0.85rem; cursor: pointer; }
         .stage-area { display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; position: relative; }
         .status-capsule { background: rgba(0, 0, 0, 0.85); border: 1px solid #444; padding: 5px 20px; border-radius: 15px; font-weight: bold; font-size: 0.85rem; color: #ffd700; margin-bottom: 12px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.5); }
         .hands-container { display: flex; width: 100%; justify-content: space-around; align-items: flex-start; margin-bottom: 5px; }
@@ -110,9 +113,10 @@
         .road-P { border-color: #2563eb; }
         .road-B { border-color: #dc2626; }
         .tie-line::after { content: ''; position: absolute; top: 4px; left: -2px; width: 13px; height: 2px; background: #16a34a; transform: rotate(-45deg); }
-        .control-bar { background: #000; border-top: 1px solid #222; padding: 6px 4px; font-size: 0.75rem; border-radius: 6px; }
-        .account-info { display: flex; justify-content: space-between; align-items: center; font-weight: bold; color: #aaa; }
+        .control-bar { background: #000; border-top: 1px solid #222; padding: 6px 4px; font-size: 0.75rem; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; }
+        .account-info { display: flex; gap: 10px; align-items: center; font-weight: bold; color: #aaa; }
         .account-info span { color: #ffd700; }
+        .close-btn { background: linear-gradient(135deg, #d97706, #b45309); color: #fff; border: none; padding: 5px 10px; border-radius: 6px; font-weight: bold; font-size: 0.75rem; cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.3); }
     </style>
 </head>
 <body>
@@ -177,6 +181,19 @@
             <button class="sidebar-close" onclick="toggleSidebar(false)">✕</button>
         </div>
         <div class="sidebar-content">
+            <div class="sidebar-item">
+                <span class="sidebar-label">은행 총 잔고 (Cash)</span>
+                <span class="sidebar-value">₩<span id="bank-cash-val">0</span></span>
+            </div>
+
+            <div class="sidebar-item">
+                <span class="sidebar-label">출금 (잔고 ➔ 보유금 전환)</span>
+                <div class="withdraw-box">
+                    <input type="number" id="withdraw-input-amt" class="withdraw-input" placeholder="금액 입력">
+                    <button class="withdraw-btn" onclick="processWithdraw()">출금하기</button>
+                </div>
+            </div>
+
             <div class="sidebar-item">
                 <span class="sidebar-label">총 누적 롤링 (배팅액)</span>
                 <span class="sidebar-value">₩<span id="rolling-val">0</span></span>
@@ -263,22 +280,24 @@
 
     <div class="control-bar">
         <div class="account-info">
-            <div>보유: ₩<span id="cash-val">50,000</span></div>
+            <div>보유금: ₩<span id="cash-val">0</span></div>
             <div>배팅: ₩<span id="bet-val">0</span></div>
             <div>획득: ₩<span id="paid-val">0</span></div>
         </div>
+        <button class="close-btn" onclick="handleCloseGame()">마감</button>
     </div>
 </div>
 
 <script>
     let currentUser = null;
-    let cash = 50000;
+    let serverCash = 0; // DB 잔고
+    let cash = 0;       // 게임 플레이 보유금
     let totalRolling = 0;
     let selectedChip = 500;
     let bets = { PLAYER: 0, BANKER: 0, TIE: 0, P_PAIR: 0, B_PAIR: 0, PERFECT_PAIR: 0 };
     let isBettingOpen = false;
 
-    let authMode = 'login'; // 'login' or 'register'
+    let authMode = 'login';
 
     let lastWinner = null;
     let currentCol = 0;
@@ -291,10 +310,9 @@
         initBigRoadGrid();
         const savedUser = localStorage.getItem('bacc_server_user');
         if (savedUser) {
-            document.getElementById('login-overlay').style.display = 'flex';
-        } else {
-            document.getElementById('login-overlay').style.display = 'flex';
+            document.getElementById('username-input').value = savedUser;
         }
+        document.getElementById('login-overlay').style.display = 'flex';
     };
 
     function switchAuthTab(mode) {
@@ -351,12 +369,16 @@
                 const data = await res.json();
                 if (res.ok) {
                     currentUser = data.username;
-                    cash = data.cash;
+                    serverCash = data.cash;
+                    cash = 0; // 로그인 직후 보유금은 0, 출금해서 충전해야 함
                     totalRolling = data.total_rolling;
+
+                    localStorage.setItem('bacc_server_user', currentUser);
 
                     document.getElementById('login-overlay').style.display = 'none';
                     document.getElementById('header-nickname').innerText = `${currentUser} 님`;
                     document.getElementById('sidebar-user-title').innerText = `${currentUser} 님의 정보`;
+                    document.getElementById('bank-cash-val').innerText = Math.floor(serverCash).toLocaleString();
                     document.getElementById('cash-val').innerText = Math.floor(cash).toLocaleString();
                     document.getElementById('rolling-val').innerText = Math.floor(totalRolling).toLocaleString();
 
@@ -374,7 +396,53 @@
 
     function handleLogout() {
         if (confirm("로그아웃 하시겠습니까?")) {
+            localStorage.removeItem('bacc_server_user');
             location.reload();
+        }
+    }
+
+    // 출금 기능: 잔고 -> 보유금으로 이동
+    async function processWithdraw() {
+        const inputAmt = parseInt(document.getElementById('withdraw-input-amt').value, 10);
+        if (isNaN(inputAmt) || inputAmt <= 0) {
+            alert("올바른 출금 금액을 입력해주세요.");
+            return;
+        }
+        if (inputAmt > serverCash) {
+            alert("잔고가 부족합니다.");
+            return;
+        }
+
+        serverCash -= inputAmt;
+        cash += inputAmt;
+
+        document.getElementById('bank-cash-val').innerText = Math.floor(serverCash).toLocaleString();
+        document.getElementById('cash-val').innerText = Math.floor(cash).toLocaleString();
+        document.getElementById('withdraw-input-amt').value = '';
+
+        await updateServerData(0);
+        alert(`₩${inputAmt.toLocaleString()}이(가) 출금되어 게임 보유금으로 충전되었습니다.`);
+        toggleSidebar(false);
+    }
+
+    // 마감 기능: 현재 보유금 및 획득금을 잔고로 이동
+    async function handleCloseGame() {
+        let totalToBank = cash;
+        if (totalToBank <= 0) {
+            alert("마감할 보유금이 없습니다.");
+            return;
+        }
+
+        if (confirm(`현재 보유 중인 ₩${totalToBank.toLocaleString()}을(를) 은행 잔고로 마감(이동)하시겠습니까?`)) {
+            serverCash += totalToBank;
+            cash = 0;
+
+            document.getElementById('bank-cash-val').innerText = Math.floor(serverCash).toLocaleString();
+            document.getElementById('cash-val').innerText = Math.floor(cash).toLocaleString();
+            document.getElementById('paid-val').innerText = '0';
+
+            await updateServerData(0);
+            alert("정상적으로 마감 처리되었습니다.");
         }
     }
 
@@ -384,7 +452,7 @@
             await fetch('/api/update', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username: currentUser, cash: cash, rolling_add: rollingAdd })
+                body: JSON.stringify({ username: currentUser, cash: serverCash, rolling_add: rollingAdd })
             });
         } catch (e) {
             console.error("서버 동기화 실패");
@@ -434,7 +502,7 @@
             item.innerHTML = `
                 <div>
                     <div style="font-weight:bold; color:#ffd700;">${index + 1}위. ${u.username} ${isMe}</div>
-                    <div style="font-size:0.75rem; color:#aaa;">보유 잔액: ₩${Math.floor(u.cash).toLocaleString()}</div>
+                    <div style="font-size:0.75rem; color:#aaa;">은행 잔액: ₩${Math.floor(u.cash).toLocaleString()}</div>
                 </div>
             `;
             container.appendChild(item);
@@ -511,8 +579,8 @@
                     const data = await res.json();
                     if (res.ok && data.success) {
                         if (username === currentUser) {
-                            cash = newCash;
-                            document.getElementById('cash-val').innerText = Math.floor(cash).toLocaleString();
+                            serverCash = newCash;
+                            document.getElementById('bank-cash-val').innerText = Math.floor(serverCash).toLocaleString();
                         }
                         alert(`[${username}] 유저의 잔액이 ₩${newCash.toLocaleString()}(으)로 수정되었습니다.`);
                         verifyAdminPassword();
@@ -537,6 +605,7 @@
             });
             if (res.ok) {
                 if (username === currentUser) {
+                    localStorage.removeItem('bacc_server_user');
                     alert("현재 계정이 삭제되어 새로고침합니다.");
                     location.reload();
                     return;
@@ -734,8 +803,7 @@
         if (isPerfPair && bets.PERFECT_PAIR > 0) winPayout += bets.PERFECT_PAIR * 26;
 
         const netProfit = winPayout - totalBet;
-        cash += winPayout;
-        await updateServerData(0);
+        cash += winPayout; // 승리금은 보유금(cash)으로 들어감
 
         document.getElementById('paid-val').innerText = Math.floor(winPayout).toLocaleString();
         document.getElementById('cash-val').innerText = Math.floor(cash).toLocaleString();
@@ -811,7 +879,7 @@
         let betAmount = selectedChip === 'ALLIN' ? cash : selectedChip;
 
         if (cash < betAmount || betAmount <= 0) {
-            alert("잔액이 부족합니다.");
+            alert("보유금이 부족합니다. 사이드바(메뉴)에서 출금 후 이용해주세요.");
             return;
         }
 
