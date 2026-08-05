@@ -9,12 +9,12 @@ def init_db():
   conn = sqlite3.connect(DB_NAME)
   cursor = conn.cursor()
   cursor.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            username TEXT PRIMARY KEY,
-            cash INTEGER DEFAULT 50000,
-            total_rolling INTEGER DEFAULT 0
-        )
-    """)
+                 CREATE TABLE IF NOT EXISTS users (
+                                                    username TEXT PRIMARY KEY,
+                                                    cash INTEGER DEFAULT 50000,
+                                                    total_rolling INTEGER DEFAULT 0
+                 )
+                 """)
   conn.commit()
   conn.close()
 
@@ -30,7 +30,7 @@ def login():
   conn = sqlite3.connect(DB_NAME)
   cursor = conn.cursor()
   cursor.execute(
-      "SELECT cash, total_rolling FROM users WHERE username = ?", (username,)
+    "SELECT cash, total_rolling FROM users WHERE username = ?", (username,)
   )
   row = cursor.fetchone()
 
@@ -39,8 +39,8 @@ def login():
   else:
     cash, total_rolling = 50000, 0
     cursor.execute(
-        "INSERT INTO users (username, cash, total_rolling) VALUES (?, ?, ?)",
-        (username, cash, total_rolling),
+      "INSERT INTO users (username, cash, total_rolling) VALUES (?, ?, ?)",
+      (username, cash, total_rolling),
     )
     conn.commit()
 
@@ -59,12 +59,12 @@ def update_user():
   conn = sqlite3.connect(DB_NAME)
   cursor = conn.cursor()
   cursor.execute(
-      """
-        UPDATE users
-        SET cash = ?, total_rolling = total_rolling + ?
-        WHERE username = ?
+    """
+    UPDATE users
+    SET cash = ?, total_rolling = total_rolling + ?
+    WHERE username = ?
     """,
-      (cash, rolling_add, username),
+    (cash, rolling_add, username),
   )
   conn.commit()
   conn.close()
@@ -85,43 +85,27 @@ def admin_get_users():
   conn.close()
 
   users = [
-      {"username": r[0], "cash": r[1], "total_rolling": r[2]} for r in rows
+    {"username": r[0], "cash": r[1], "total_rolling": r[2]} for r in rows
   ]
   return jsonify(users)
 
 
 # 관리자: 유저 잔액 수정
 @app.route('/api/admin/edit', methods=['POST'])
-
 def admin_edit_user():
-
   data = request.json
-
   pw = data.get('pw')
-
   username = data.get('username')
-
   new_cash = data.get('cash')
 
-
-
   if pw != "3195":
-
     return jsonify({"error": "Unauthorized"}), 401
 
-
-
-  conn = get_db_connection()
-
+  conn = sqlite3.connect(DB_NAME)
   cursor = conn.cursor()
-
   cursor.execute('UPDATE users SET cash = ? WHERE username = ?', (new_cash, username))
-
   conn.commit()
-
   conn.close()
-
-
 
   return jsonify({"success": True})
 
@@ -129,7 +113,6 @@ def admin_edit_user():
 # 관리자: 유저 삭제
 @app.route("/api/admin/delete", methods=["POST"])
 def admin_delete_user():
-  data.get("pw") != "3195"
   data = request.json
   if data.get("pw") != "3195":
     return jsonify({"error": "Unauthorized"}), 403
