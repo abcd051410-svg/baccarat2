@@ -3,11 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>BACCARAT CLASSIC - SERVER SYNC</title>
+    <title>BACCARAT & MINI GAMES</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-tap-highlight-color: transparent; }
         html, body { width: 100%; height: 100%; overflow: hidden; background: #0d0208; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-        .game-container { width: 100%; height: 100dvh; background: radial-gradient(circle at 50% 20%, #581238 0%, #290419 60%, #12010a 100%); display: flex; flex-direction: column; justify-content: space-between; position: relative; padding: calc(env(safe-area-inset-top) + 8px) 10px calc(env(safe-area-inset-bottom) + 8px) 10px; }
+        
+        .screen { width: 100%; height: 100dvh; display: none; flex-direction: column; justify-content: space-between; position: relative; padding: calc(env(safe-area-inset-top) + 8px) 10px calc(env(safe-area-inset-bottom) + 8px) 10px; background: radial-gradient(circle at 50% 20%, #581238 0%, #290419 60%, #12010a 100%); }
+        .screen.active { display: flex; }
+
         .login-overlay, .admin-modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.85); z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 20px; }
         .login-card, .admin-card { background: #1b0713; border: 2px solid #ffd700; border-radius: 12px; padding: 24px; width: 100%; max-width: 340px; display: flex; flex-direction: column; gap: 14px; box-shadow: 0 0 25px rgba(255, 215, 0, 0.3); text-align: center; }
         .login-title { font-size: 1.2rem; font-weight: bold; color: #ffd700; }
@@ -20,9 +23,12 @@
         .admin-card { max-width: 450px; max-height: 85vh; text-align: left; }
         .admin-user-list { max-height: 280px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding-right: 4px; }
         .admin-user-item { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); padding: 10px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; }
+
         .header-bar { display: flex; justify-content: space-between; align-items: center; height: 36px; padding: 0 4px; z-index: 5; }
         .header-title { font-size: 0.9rem; font-weight: 800; letter-spacing: 1px; color: #ffd700; display: flex; align-items: center; gap: 6px; }
-        .menu-btn { background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); color: #fff; padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: bold; cursor: pointer; }
+        .header-btns { display: flex; gap: 6px; }
+        .menu-btn, .back-btn { background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); color: #fff; padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: bold; cursor: pointer; }
+
         .sidebar-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.6); z-index: 100; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
         .sidebar-overlay.open { opacity: 1; pointer-events: auto; }
         .sidebar { position: fixed; top: 0; right: -280px; width: 280px; height: 100%; background: #15050f; border-left: 1px solid #331225; z-index: 101; box-shadow: -5px 0 20px rgba(0,0,0,0.8); transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1); display: flex; flex-direction: column; padding: 20px; overflow-y: auto; }
@@ -35,12 +41,15 @@
         .sidebar-label { font-size: 0.75rem; color: #aaa; }
         .sidebar-value { font-size: 1.05rem; font-weight: bold; color: #ffd700; }
         .sidebar-btn { padding: 10px; border-radius: 8px; font-weight: bold; cursor: pointer; text-align: center; border: none; }
+        .mini-game-open-btn { background: rgba(16, 185, 129, 0.2); border: 1px solid #10b981; color: #34d399; }
         .rank-open-btn { background: rgba(59, 130, 246, 0.2); border: 1px solid #3b82f6; color: #60a5fa; }
         .admin-open-btn { background: rgba(234, 179, 8, 0.2); border: 1px solid #eab308; color: #facc15; }
         .logout-btn { background: rgba(239, 68, 68, 0.2); border: 1px solid #ef4444; color: #f87171; }
         .withdraw-box { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
         .withdraw-input { width: 100%; padding: 8px; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; color: #fff; font-size: 0.9rem; text-align: right; outline: none; }
         .withdraw-btn { background: linear-gradient(135deg, #10b981, #047857); color: #fff; border: none; padding: 8px; border-radius: 6px; font-weight: bold; font-size: 0.85rem; cursor: pointer; }
+
+        /* 바카라 전용 UI */
         .stage-area { display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; position: relative; }
         .status-capsule { background: rgba(0, 0, 0, 0.85); border: 1px solid #444; padding: 5px 20px; border-radius: 15px; font-weight: bold; font-size: 0.85rem; color: #ffd700; margin-bottom: 12px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.5); }
         .hands-container { display: flex; width: 100%; justify-content: space-around; align-items: flex-start; margin-bottom: 5px; }
@@ -118,13 +127,25 @@
         .btn-edit { background: #2563eb; color: #fff; }
         .btn-del { background: #dc2626; color: #fff; }
         .admin-actions { display: flex; gap: 4px; }
+
+        /* 미니게임 로비 및 게임 화면 스타일 */
+        .mini-lobby-container { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; padding: 20px 10px; flex: 1; align-content: center; }
+        .mini-card { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,215,0,0.3); border-radius: 14px; padding: 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; cursor: pointer; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.5); transition: transform 0.2s; }
+        .mini-card:active { transform: scale(0.95); }
+        .mini-card-icon { font-size: 2.2rem; }
+        .mini-card-title { font-size: 0.95rem; font-weight: bold; color: #ffd700; }
+        .mini-card-desc { font-size: 0.7rem; color: #aaa; }
+        
+        .mini-stage { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 15px; gap: 16px; text-align: center; }
+        .mini-panel { background: rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.15); border-radius: 12px; padding: 20px; width: 100%; max-width: 360px; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.6); }
+        .mini-box-btn { background: linear-gradient(135deg, #3b82f6, #1d4ed8); color: #fff; border: none; padding: 12px; border-radius: 8px; font-weight: bold; font-size: 1rem; cursor: pointer; }
     </style>
 </head>
 <body>
 
 <div class="login-overlay" id="login-overlay">
     <div class="login-card">
-        <div class="login-title">🎰 바카라 로그인 / 회원가입</div>
+        <div class="login-title">🎰 바카라 & 미니게임 로그인</div>
         <div class="tab-row">
             <button class="tab-btn active" id="tab-login-btn" onclick="switchAuthTab('login')">로그인</button>
             <button class="tab-btn" id="tab-reg-btn" onclick="switchAuthTab('register')">회원가입</button>
@@ -169,7 +190,8 @@
     </div>
 </div>
 
-<div class="game-container">
+<!-- [화면 1] 바카라 게임 메인 화면 -->
+<div class="screen active" id="screen-baccarat">
     <div class="header-bar">
         <div class="header-title" id="header-nickname">BACCARAT</div>
         <button class="menu-btn" onclick="toggleSidebar(true)">메뉴</button>
@@ -186,7 +208,6 @@
                 <span class="sidebar-label">은행 총 잔고 (Cash)</span>
                 <span class="sidebar-value">₩<span id="bank-cash-val">0</span></span>
             </div>
-            
             <div class="sidebar-item">
                 <span class="sidebar-label">출금 (잔고 ➔ 보유금 전환)</span>
                 <div class="withdraw-box">
@@ -194,22 +215,19 @@
                     <button class="withdraw-btn" onclick="processWithdraw()">출금하기</button>
                 </div>
             </div>
-
             <div class="sidebar-item">
                 <span class="sidebar-label">필요 롤링 진행도</span>
                 <span class="sidebar-value"><span id="rolling-progress-val">0</span> / <span id="rolling-target-val">0</span> (₩)</span>
             </div>
-
             <div class="sidebar-item">
                 <span class="sidebar-label">총 누적 배팅액 (롤링)</span>
                 <span class="sidebar-value">₩<span id="rolling-val">0</span></span>
             </div>
-
             <div class="sidebar-item">
                 <span class="sidebar-label">현재 총 수익률</span>
                 <span class="sidebar-value" id="profit-rate-val">0.0%</span>
             </div>
-
+            <button class="sidebar-btn mini-game-open-btn" onclick="goToScreen('screen-mini-lobby')">🎮 미니게임 존 가기</button>
             <button class="sidebar-btn rank-open-btn" onclick="openRankingModal()">🏆 수익률 랭킹 보기</button>
             <button class="sidebar-btn admin-open-btn" onclick="openAdminAuthModal()">관리자 모드</button>
             <button class="sidebar-btn logout-btn" onclick="handleLogout()">로그아웃</button>
@@ -221,9 +239,7 @@
             <div class="result-title" id="result-title">PLAYER WIN</div>
             <div id="profit-container"></div>
         </div>
-
         <div class="status-capsule" id="status-capsule">배팅을 진행해주세요 (10초)</div>
-
         <div class="hands-container">
             <div class="hand-column">
                 <div class="hand-label label-p">PLAYER <span class="hand-score" id="score-p">-</span></div>
@@ -238,20 +254,10 @@
 
     <div class="betting-table">
         <div class="pair-row">
-            <div class="pair-spot" id="zone-P_PAIR" onclick="placeBet('P_PAIR')">
-                P.PAIR 11:1
-                <div class="chip-placed" id="chip-P_PAIR">🪙 <span id="val-P_PAIR">0</span></div>
-            </div>
-            <div class="pair-spot pair-perfect" id="zone-PERFECT_PAIR" onclick="placeBet('PERFECT_PAIR')">
-                PERFECT 25:1
-                <div class="chip-placed" id="chip-PERFECT_PAIR">🪙 <span id="val-PERFECT_PAIR">0</span></div>
-            </div>
-            <div class="pair-spot pair-banker" id="zone-B_PAIR" onclick="placeBet('B_PAIR')">
-                B.PAIR 11:1
-                <div class="chip-placed" id="chip-B_PAIR">🪙 <span id="val-B_PAIR">0</span></div>
-            </div>
+            <div class="pair-spot" id="zone-P_PAIR" onclick="placeBet('P_PAIR')">P.PAIR 11:1<div class="chip-placed" id="chip-P_PAIR">🪙 <span id="val-P_PAIR">0</span></div></div>
+            <div class="pair-spot pair-perfect" id="zone-PERFECT_PAIR" onclick="placeBet('PERFECT_PAIR')">PERFECT 25:1<div class="chip-placed" id="chip-PERFECT_PAIR">🪙 <span id="val-PERFECT_PAIR">0</span></div></div>
+            <div class="pair-spot pair-banker" id="zone-B_PAIR" onclick="placeBet('B_PAIR')">B.PAIR 11:1<div class="chip-placed" id="chip-B_PAIR">🪙 <span id="val-B_PAIR">0</span></div></div>
         </div>
-
         <div class="main-bet-row">
             <div class="bet-zone zone-player" id="zone-PLAYER" onclick="placeBet('PLAYER')">
                 <div class="zone-title" style="color: #60a5fa;">PLAYER<br><span style="font-size:0.7rem; font-weight:normal; color:#fff;">1:1</span></div>
@@ -279,15 +285,11 @@
             <div class="chip-btn c-500k" onclick="selectChip(500000, this)">50만</div>
             <div class="chip-btn c-allin" onclick="selectChip('ALLIN', this)">ALL</div>
         </div>
-        <div class="action-btns">
-            <button class="action-btn reset-btn" onclick="resetCurrentBets()">리셋</button>
-        </div>
+        <div class="action-btns"><button class="action-btn reset-btn" onclick="resetCurrentBets()">리셋</button></div>
     </div>
 
     <div class="bottom-panels">
-        <div class="road-board">
-            <div class="big-road-grid" id="big-road-grid"></div>
-        </div>
+        <div class="road-board"><div class="big-road-grid" id="big-road-grid"></div></div>
     </div>
 
     <div class="control-bar">
@@ -300,6 +302,112 @@
     </div>
 </div>
 
+<!-- [화면 2] 미니게임 로비 -->
+<div class="screen" id="screen-mini-lobby">
+    <div class="header-bar">
+        <div class="header-title">🎁 미니게임 로비</div>
+        <button class="back-btn" onclick="goToScreen('screen-baccarat')">⬅ 바카라로</button>
+    </div>
+    <div class="mini-lobby-container">
+        <div class="mini-card" onclick="goToScreen('screen-attendance')">
+            <div class="mini-card-icon">📅</div>
+            <div class="mini-card-title">출석 체크</div>
+            <div class="mini-card-desc">매일매일 출석하고 보상 획득!</div>
+        </div>
+        <div class="mini-card" onclick="goToScreen('screen-rps')">
+            <div class="mini-card-icon">✌️</div>
+            <div class="mini-card-title">가위바위보 연승</div>
+            <div class="mini-card-desc">연승할수록 커지는 상금 배율</div>
+        </div>
+        <div class="mini-card" onclick="goToScreen('screen-oddeven')">
+            <div class="mini-card-icon">🎯</div>
+            <div class="mini-card-title">홀짝 맞추기</div>
+            <div class="mini-card-desc">간단하고 빠른 50:50 승부</div>
+        </div>
+        <div class="mini-card" onclick="goToScreen('screen-box')">
+            <div class="mini-card-icon">🎁</div>
+            <div class="mini-card-title">행운의 보물상자</div>
+            <div class="mini-card-desc">상자를 열어 대박 캐시를 뽑자!</div>
+        </div>
+    </div>
+    <div class="control-bar">
+        <div class="account-info">보유금: ₩<span id="lobby-cash-val">0</span></div>
+    </div>
+</div>
+
+<!-- [미니게임 1] 출석 체크 -->
+<div class="screen" id="screen-attendance">
+    <div class="header-bar">
+        <div class="header-title">📅 럭키 출석 체크</div>
+        <button class="back-btn" onclick="goToScreen('screen-mini-lobby')">⬅ 로비로</button>
+    </div>
+    <div class="mini-stage">
+        <div class="mini-panel">
+            <div style="font-size: 1.1rem; font-weight: bold; color: #ffd700;">오늘의 출석 보상</div>
+            <div style="font-size: 1.5rem; font-weight: 900; color: #4ade80;">₩10,000 캐시 지급</div>
+            <div id="attendance-status-text" style="font-size: 0.8rem; color: #aaa;">오늘 아직 출석하지 않았습니다.</div>
+            <button class="mini-box-btn" id="attendance-btn" onclick="claimAttendance()">출석 체크하기</button>
+        </div>
+    </div>
+    <div class="control-bar"><div class="account-info">보유금: ₩<span id="att-cash-val">0</span></div></div>
+</div>
+
+<!-- [미니게임 2] 가위바위보 연승 -->
+<div class="screen" id="screen-rps">
+    <div class="header-bar">
+        <div class="header-title">✌️ 가위바위보 연승 도전</div>
+        <button class="back-btn" onclick="goToScreen('screen-mini-lobby')">⬅ 로비로</button>
+    </div>
+    <div class="mini-stage">
+        <div class="mini-panel">
+            <div style="font-size: 0.95rem; font-weight: bold; color: #ffd700;" id="rps-streak-info">현재 연승: 0연승 (보상 배율: 1배)</div>
+            <div id="rps-result-box" style="font-size: 1.1rem; min-height: 40px; display:flex; align-items:center; justify-content:center;">상대를 선택해주세요!</div>
+            <div style="display: flex; gap: 8px; justify-content: center; margin-top: 10px;">
+                <button class="mini-box-btn" style="flex:1;" onclick="playRPS('rock')">✊ 바위</button>
+                <button class="mini-box-btn" style="flex:1;" onclick="playRPS('paper')">✋ 보</button>
+                <button class="mini-box-btn" style="flex:1;" onclick="playRPS('scissors')">✌️ 가위</button>
+            </div>
+            <button class="action-btn reset-btn" style="width:100%; height:36px; border-radius:6px; margin-top:6px;" onclick="cashoutRPS()">수익 챙기기 (정산)</button>
+        </div>
+    </div>
+    <div class="control-bar"><div class="account-info">보유금: ₩<span id="rps-cash-val">0</span></div></div>
+</div>
+
+<!-- [미니게임 3] 홀짝 -->
+<div class="screen" id="screen-oddeven">
+    <div class="header-bar">
+        <div class="header-title">🎯 50:50 홀짝 예측</div>
+        <button class="back-btn" onclick="goToScreen('screen-mini-lobby')">⬅ 로비로</button>
+    </div>
+    <div class="mini-stage">
+        <div class="mini-panel">
+            <div style="font-size: 0.9rem; color: #aaa;">배팅 금액: ₩5,000 (적중시 2배 환급)</div>
+            <div id="oe-result-box" style="font-size: 1.2rem; font-weight: bold; min-height: 40px; display:flex; align-items:center; justify-content:center;">홀 또는 짝을 선택하세요</div>
+            <div style="display: flex; gap: 10px;">
+                <button class="mini-box-btn" style="flex:1; background:linear-gradient(135deg, #2563eb, #1e40af);" onclick="playOddEven('odd')">홀 (ODD)</button>
+                <button class="mini-box-btn" style="flex:1; background:linear-gradient(135deg, #dc2626, #991b1b);" onclick="playOddEven('even')">짝 (EVEN)</button>
+            </div>
+        </div>
+    </div>
+    <div class="control-bar"><div class="account-info">보유금: ₩<span id="oe-cash-val">0</span></div></div>
+</div>
+
+<!-- [미니게임 4] 보물상자 -->
+<div class="screen" id="screen-box">
+    <div class="header-bar">
+        <div class="header-title">🎁 행운의 보물상자</div>
+        <button class="back-btn" onclick="goToScreen('screen-mini-lobby')">⬅ 로비로</button>
+    </div>
+    <div class="mini-stage">
+        <div class="mini-panel">
+            <div style="font-size: 0.9rem; color: #aaa;">비용: ₩2,000 / 최대 ₩50,000 당첨 찬스!</div>
+            <div id="box-result-text" style="font-size: 1.3rem; font-weight: 900; color: #ffd700; min-height: 45px; display:flex; align-items:center; justify-content:center;">상자를 열어보세요!</div>
+            <button class="mini-box-btn" onclick="openLuckyBox()">상자 열기 (₩2,000)</button>
+        </div>
+    </div>
+    <div class="control-bar"><div class="account-info">보유금: ₩<span id="box-cash-val">0</span></div></div>
+</div>
+
 <script>
     let currentUser = null;
     let serverCash = 0; 
@@ -308,6 +416,7 @@
     let initialWithdraw = 0; 
     let currentRolling = 0;  
     let profitRate = 0.0;    
+    let lastAttendance = '';
 
     let selectedChip = 500;
     let bets = { PLAYER: 0, BANKER: 0, TIE: 0, P_PAIR: 0, B_PAIR: 0, PERFECT_PAIR: 0 };
@@ -318,6 +427,8 @@
     let currentCol = 0;
     let currentRow = 0;
     let roadMatrix = {};
+
+    let rpsStreak = 0;
 
     const delay = (ms) => new Promise(res => setTimeout(res, ms));
 
@@ -331,6 +442,27 @@
             document.getElementById('login-overlay').style.display = 'flex';
         }
     };
+
+    function goToScreen(screenId) {
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+        document.getElementById(screenId).classList.add('active');
+        toggleSidebar(false);
+        syncAllCashUI();
+    }
+
+    function syncAllCashUI() {
+        const vals = [
+            'bank-cash-val', 'cash-val', 'lobby-cash-val', 
+            'att-cash-val', 'rps-cash-val', 'oe-cash-val', 'box-cash-val'
+        ];
+        vals.forEach(id => {
+            const el = document.getElementById(id);
+            if(el) {
+                if(id === 'bank-cash-val') el.innerText = Math.floor(serverCash).toLocaleString();
+                else el.innerText = Math.floor(cash).toLocaleString();
+            }
+        });
+    }
 
     async function autoLogin(username) {
         try {
@@ -346,6 +478,7 @@
                     initialWithdraw = userObj.initial_withdraw || 0;
                     currentRolling = userObj.current_rolling || 0;
                     profitRate = userObj.profit_rate || 0.0;
+                    lastAttendance = userObj.last_attendance || '';
 
                     document.getElementById('login-overlay').style.display = 'none';
                     document.getElementById('header-nickname').innerText = `${currentUser} 님`;
@@ -353,6 +486,7 @@
                     
                     updateUIValues();
                     updateCloseButtonState();
+                    syncAllCashUI();
 
                     initBigRoadGrid();
                     generateRandomHistory();
@@ -427,6 +561,7 @@
                     initialWithdraw = data.initial_withdraw || 0;
                     currentRolling = data.current_rolling || 0;
                     profitRate = data.profit_rate || 0.0;
+                    lastAttendance = data.last_attendance || '';
 
                     localStorage.setItem('bacc_server_user', currentUser);
 
@@ -436,6 +571,7 @@
                     
                     updateUIValues();
                     updateCloseButtonState();
+                    syncAllCashUI();
 
                     initBigRoadGrid();
                     generateRandomHistory();
@@ -474,9 +610,10 @@
         document.getElementById('withdraw-input-amt').value = '';
         updateUIValues();
         updateCloseButtonState();
+        syncAllCashUI();
 
         await updateServerData(0);
-        alert(`₩${inputAmt.toLocaleString()}이(가) 출금되어 게임 보유금으로 충전되었습니다. (이제 롤링 100%를 채워야 마감할 수 있습니다)`);
+        alert(`₩${inputAmt.toLocaleString()}이(가) 출금되어 게임 보유금으로 충전되었습니다.`);
         toggleSidebar(false);
     }
 
@@ -506,10 +643,11 @@
 
             updateUIValues();
             updateCloseButtonState();
+            syncAllCashUI();
             document.getElementById('paid-val').innerText = '0';
 
             await updateServerData(0);
-            alert(`정상적으로 마감 처리되었습니다. (이번 게임 총 수익률: ${profitRate.toFixed(2)}%)`);
+            alert(`정상적으로 마감 처리되었습니다. (수익률: ${profitRate.toFixed(2)}%)`);
         }
     }
 
@@ -517,10 +655,8 @@
         const closeBtn = document.getElementById('close-game-btn');
         if (initialWithdraw > 0 && currentRolling < initialWithdraw) {
             closeBtn.disabled = true;
-            closeBtn.title = "출금 금액 대비 롤링 100%를 채워야 마감할 수 있습니다.";
         } else {
             closeBtn.disabled = false;
-            closeBtn.title = "";
         }
     }
 
@@ -534,6 +670,7 @@
         const rateEl = document.getElementById('profit-rate-val');
         rateEl.innerText = `${profitRate.toFixed(2)}%`;
         rateEl.style.color = profitRate >= 0 ? '#4ade80' : '#ef4444';
+        syncAllCashUI();
     }
 
     async function updateServerData(rollingAdd = 0) {
@@ -552,7 +689,8 @@
                     rolling_add: rollingAdd,
                     initial_withdraw: initialWithdraw,
                     current_rolling: currentRolling,
-                    profit_rate: profitRate
+                    profit_rate: profitRate,
+                    last_attendance: lastAttendance
                 })
             });
         } catch (e) {
@@ -575,39 +713,19 @@
                 const users = await res.json();
                 renderRankingUserList(users);
                 document.getElementById('ranking-modal').style.display = 'flex';
-            } else {
-                alert("랭킹 정보를 불러오지 못했습니다.");
             }
-        } catch (e) {
-            alert("통신 오류 발생");
-        }
+        } catch (e) {}
     }
-
-    function closeRankingModal() {
-        document.getElementById('ranking-modal').style.display = 'none';
-    }
-
+    function closeRankingModal() { document.getElementById('ranking-modal').style.display = 'none'; }
     function renderRankingUserList(users) {
         const container = document.getElementById('ranking-user-list-container');
         container.innerHTML = '';
-        if (users.length === 0) {
-            container.innerHTML = '<div style="text-align:center; color:#aaa; padding:15px;">등록된 유저가 없습니다.</div>';
-            return;
-        }
         users.sort((a, b) => b.profit_rate - a.profit_rate);
-
         users.forEach((u, index) => {
             const item = document.createElement('div');
             item.className = 'admin-user-item';
             const isMe = u.username === currentUser ? '(나)' : '';
-            const colorClass = u.profit_rate >= 0 ? 'color:#4ade80;' : 'color:#ef4444;';
-            item.innerHTML = `
-                <div>
-                    <div style="font-weight:bold; color:#ffd700;">${index + 1}위. ${u.username} ${isMe}</div>
-                    <div style="font-size:0.75rem; color:#aaa;">은행 잔액: ₩${Math.floor(u.cash).toLocaleString()}</div>
-                </div>
-                <div style="font-weight:bold; ${colorClass}">${u.profit_rate.toFixed(2)}%</div>
-            `;
+            item.innerHTML = `<div><div style="font-weight:bold; color:#ffd700;">${index + 1}위. ${u.username} ${isMe}</div></div><div style="font-weight:bold; color:${u.profit_rate >= 0 ? '#4ade80' : '#ef4444'};">${u.profit_rate.toFixed(2)}%</div>`;
             container.appendChild(item);
         });
     }
@@ -619,13 +737,8 @@
         document.getElementById('admin-panel-card').style.display = 'none';
         document.getElementById('admin-modal').style.display = 'flex';
     }
-
     async function verifyAdminPassword() {
         const pw = document.getElementById('admin-pw-input').value.trim();
-        if (pw !== "3195") {
-            alert("비밀번호가 틀렸습니다.");
-            return;
-        }
         try {
             const res = await fetch(`/api/admin/users?pw=${pw}`);
             if (res.ok) {
@@ -633,91 +746,140 @@
                 document.getElementById('admin-login-card').style.display = 'none';
                 document.getElementById('admin-panel-card').style.display = 'flex';
                 renderAdminUserList(users, pw);
-            } else {
-                alert("비밀번호가 틀렸습니다.");
-            }
-        } catch (e) {
-            alert("통신 오류 발생");
-        }
+            } else { alert("비밀번호가 틀렸습니다."); }
+        } catch (e) {}
     }
-
     function closeAdminModal() { document.getElementById('admin-modal').style.display = 'none'; }
-
     function renderAdminUserList(users, pw) {
         const container = document.getElementById('admin-user-list-container');
         container.innerHTML = '';
-        if (users.length === 0) {
-            container.innerHTML = '<div style="text-align:center; color:#aaa; padding:15px;">등록된 유저가 없습니다.</div>';
-            return;
-        }
         users.forEach(u => {
             const item = document.createElement('div');
             item.className = 'admin-user-item';
-            const isMe = u.username === currentUser ? '(현재 접속)' : '';
-            item.innerHTML = `
-                <div>
-                    <div style="font-weight:bold; color:#ffd700;">${u.username} ${isMe}</div>
-                    <div style="font-size:0.75rem; color:#aaa;">잔액: ₩${Math.floor(u.cash).toLocaleString()} | 수익률: ${u.profit_rate.toFixed(2)}%</div>
-                </div>
-                <div class="admin-actions">
-                    <button class="admin-action-btn btn-edit" onclick="adminEditUser('${u.username}', '${pw}')">수정</button>
-                    <button class="admin-action-btn btn-del" onclick="adminDeleteUser('${u.username}', '${pw}')">삭제</button>
-                </div>
-            `;
+            item.innerHTML = `<div><div style="font-weight:bold; color:#ffd700;">${u.username}</div></div><div class="admin-actions"><button class="admin-action-btn btn-edit" onclick="adminEditUser('${u.username}', '${pw}')">수정</button><button class="admin-action-btn btn-del" onclick="adminDeleteUser('${u.username}', '${pw}')">삭제</button></div>`;
             container.appendChild(item);
         });
     }
-
     async function adminEditUser(username, pw) {
         const newCashInput = prompt(`[${username}] 수정할 잔액을 입력하세요:`);
         if (newCashInput !== null) {
             const newCash = parseInt(newCashInput, 10);
-            if (!isNaN(newCash) && newCash >= 0) {
-                try {
-                    const res = await fetch('/api/admin/edit', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ pw, username, cash: newCash })
-                    });
-                    const data = await res.json();
-                    if (res.ok && data.success) {
-                        if (username === currentUser) {
-                            serverCash = newCash;
-                            updateUIValues();
-                        }
-                        alert(`[${username}] 유저의 잔액이 ₩${newCash.toLocaleString()}(으)로 수정되었습니다.`);
-                        verifyAdminPassword();
-                    } else {
-                        alert("잔액 수정에 실패했습니다.");
-                    }
-                } catch (e) {
-                    alert("서버 통신 중 오류가 발생했습니다.");
-                }
-            } else {
-                alert("유효한 숫자를 입력하세요.");
-            }
-        }
-    }
-
-    async function adminDeleteUser(username, pw) {
-        if (confirm(`정말 [${username}] 유저를 삭제하시겠습니까?`)) {
-            const res = await fetch('/api/admin/delete', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ pw, username })
-            });
-            if (res.ok) {
-                if (username === currentUser) {
-                    localStorage.removeItem('bacc_server_user');
-                    alert("현재 계정이 삭제되어 새로고침합니다.");
-                    location.reload();
-                    return;
-                }
+            if (!isNaN(newCash)) {
+                await fetch('/api/admin/edit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pw, username, cash: newCash }) });
+                if (username === currentUser) { serverCash = newCash; updateUIValues(); }
                 verifyAdminPassword();
             }
         }
     }
+    async function adminDeleteUser(username, pw) {
+        if (confirm(`정말 삭제하시겠습니까?`)) {
+            await fetch('/api/admin/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pw, username }) });
+            if (username === currentUser) { localStorage.removeItem('bacc_server_user'); location.reload(); }
+            verifyAdminPassword();
+        }
+    }
 
+    // --- 미니게임 기능 로직 ---
+    async function claimAttendance() {
+        const todayStr = new Date().toISOString().slice(0, 10);
+        if (lastAttendance === todayStr) {
+            alert("오늘 이미 출석 체크를 완료했습니다!");
+            return;
+        }
+        lastAttendance = todayStr;
+        cash += 10000;
+        document.getElementById('attendance-status-text').innerText = "오늘 출석 완료! ₩10,000 지급됨";
+        updateUIValues();
+        await updateServerData(0);
+        alert("출석 보상으로 ₩10,000이 지급되었습니다!");
+    }
+
+    function playRPS(myChoice) {
+        if (cash < 1000) {
+            alert("보유금이 부족합니다. (최소 ₩1,000 필요)");
+            return;
+        }
+        const choices = ['rock', 'paper', 'scissors'];
+        const serverChoice = choices[Math.floor(Math.random() * choices.length)];
+        
+        let result = '';
+        if (myChoice === serverChoice) result = 'draw';
+        else if (
+            (myChoice === 'rock' && serverChoice === 'scissors') ||
+            (myChoice === 'paper' && serverChoice === 'rock') ||
+            (myChoice === 'scissors' && serverChoice === 'paper')
+        ) result = 'win';
+        else result = 'lose';
+
+        const rBox = document.getElementById('rps-result-box');
+        if (result === 'win') {
+            rpsStreak++;
+            rBox.innerHTML = `<span style="color:#4ade80;">승리! (${serverChoice})</span>`;
+        } else if (result === 'draw') {
+            rBox.innerHTML = `<span style="color:#ffd700;">무승부! (${serverChoice})</span>`;
+        } else {
+            rpsStreak = 0;
+            cash -= 1000;
+            rBox.innerHTML = `<span style="color:#ef4444;">패배! (-₩1,000, 상대:${serverChoice})</span>`;
+        }
+        document.getElementById('rps-streak-info').innerText = `현재 연승: ${rpsStreak}연승 (보상 배율: ${Math.max(1, rpsStreak)}배)`;
+        updateUIValues();
+    }
+
+    async function cashoutRPS() {
+        if (rpsStreak <= 0) {
+            alert("챙길 연승 수익이 없습니다!");
+            return;
+        }
+        const reward = rpsStreak * 1000;
+        cash += reward;
+        alert(`${rpsStreak}연승 보상으로 ₩${reward.toLocaleString()}을 획득했습니다!`);
+        rpsStreak = 0;
+        document.getElementById('rps-streak-info').innerText = `현재 연승: 0연승 (보상 배율: 1배)`;
+        document.getElementById('rps-result-box').innerText = "정산 완료!";
+        updateUIValues();
+        await updateServerData(0);
+    }
+
+    async function playOddEven(myChoice) {
+        if (cash < 5000) {
+            alert("보유금이 부족합니다 (최소 ₩5,000)");
+            return;
+        }
+        cash -= 5000;
+        const number = Math.floor(Math.random() * 10) + 1;
+        const actual = number % 2 === 1 ? 'odd' : 'even';
+        const oeBox = document.getElementById('oe-result-box');
+
+        if (myChoice === actual) {
+            cash += 10000;
+            oeBox.innerHTML = `<span style="color:#4ade80;">적중! (숫자: ${number} / ${actual.toUpperCase()}) +₩10,000</span>`;
+        } else {
+            oeBox.innerHTML = `<span style="color:#ef4444;">실패! (숫자: ${number} / ${actual.toUpperCase()}) -₩5,000</span>`;
+        }
+        updateUIValues();
+        await updateServerData(0);
+    }
+
+    async function openLuckyBox() {
+        if (cash < 2000) {
+            alert("보유금이 부족합니다 (최소 ₩2,000)");
+            return;
+        }
+        cash -= 2000;
+        const rand = Math.random();
+        let prize = 1000;
+        if (rand > 0.98) prize = 50000;
+        else if (rand > 0.85) prize = 15000;
+        else if (rand > 0.50) prize = 5000;
+
+        cash += prize;
+        document.getElementById('box-result-text').innerText = `🎉 ₩${prize.toLocaleString()} 당첨!`;
+        updateUIValues();
+        await updateServerData(0);
+    }
+
+    // --- 기존 바카라 로직 ---
     function initBigRoadGrid() {
         const grid = document.getElementById('big-road-grid');
         grid.innerHTML = '';
@@ -730,7 +892,6 @@
             }
         }
     }
-
     function generateRandomHistory() {
         const totalRounds = Math.floor(Math.random() * 16) + 25;
         for (let i = 0; i < totalRounds; i++) {
@@ -742,13 +903,11 @@
         }
         scrollToLatestRoad();
     }
-
     function scrollToLatestRoad() {
         const grid = document.getElementById('big-road-grid');
         if (currentCol > 12) grid.scrollLeft = (currentCol - 10) * 17;
         else grid.scrollLeft = 0;
     }
-
     async function startLiveLoop() {
         while (true) {
             resetBoard();
@@ -757,14 +916,16 @@
 
             let timeLeft = 10;
             while (timeLeft > 0) {
-                document.getElementById('status-capsule').innerText = `배팅 진행 중 (${timeLeft}초)`;
+                const capsule = document.getElementById('status-capsule');
+                if(capsule) capsule.innerText = `배팅 진행 중 (${timeLeft}초)`;
                 await delay(1000);
                 timeLeft--;
             }
 
             isBettingOpen = false;
             setZoneDisabled(true);
-            document.getElementById('status-capsule').innerText = "배팅 마감 - 딜링 중";
+            const capsule2 = document.getElementById('status-capsule');
+            if(capsule2) capsule2.innerText = "배팅 마감 - 딜링 중";
             await delay(500);
 
             const currentRoundBet = Object.values(bets).reduce((a, b) => a + b, 0);
@@ -778,41 +939,23 @@
             await delay(3700);
         }
     }
-
     function createDeck() {
         const suits = ['♠', '♥', '♦', '♣'];
-        const ranks = [
-            { n: 'A', v: 1 }, { n: '2', v: 2 }, { n: '3', v: 3 }, { n: '4', v: 4 },
-            { n: '5', v: 5 }, { n: '6', v: 6 }, { n: '7', v: 7 }, { n: '8', v: 8 },
-            { n: '9', v: 9 }, { n: '10', v: 0 }, { n: 'J', v: 0 }, { n: 'Q', v: 0 }, { n: 'K', v: 0 }
-        ];
+        const ranks = [{ n: 'A', v: 1 }, { n: '2', v: 2 }, { n: '3', v: 3 }, { n: '4', v: 4 }, { n: '5', v: 5 }, { n: '6', v: 6 }, { n: '7', v: 7 }, { n: '8', v: 8 }, { n: '9', v: 9 }, { n: '10', v: 0 }, { n: 'J', v: 0 }, { n: 'Q', v: 0 }, { n: 'K', v: 0 }];
         let deck = [];
         for (let i = 0; i < 8; i++) {
-            for (let s of suits) {
-                for (let r of ranks) deck.push({ suit: s, name: r.n, val: r.v });
-            }
+            for (let s of suits) { for (let r of ranks) deck.push({ suit: s, name: r.n, val: r.v }); }
         }
         return deck.sort(() => Math.random() - 0.5);
     }
-
     function getScore(hand) { return hand.reduce((a, c) => a + c.val, 0) % 10; }
-
     function createCardElement(card) {
         const isRed = card.suit === '♥' || card.suit === '♦';
         const wrapper = document.createElement('div');
         wrapper.className = 'card-wrapper';
-        wrapper.innerHTML = `
-        <div class="card-inner">
-          <div class="card-back"></div>
-          <div class="card-front ${isRed ? 'red' : 'black'}">
-            <div>${card.name}</div>
-            <div style="text-align:center; font-size:1.1rem;">${card.suit}</div>
-            <div style="text-align:right;">${card.name}</div>
-          </div>
-        </div>`;
+        wrapper.innerHTML = `<div class="card-inner"><div class="card-back"></div><div class="card-front ${isRed ? 'red' : 'black'}"><div>${card.name}</div><div style="text-align:center; font-size:1.1rem;">${card.suit}</div><div style="text-align:right;">${card.name}</div></div></div>`;
         return wrapper;
     }
-
     function shouldBankerDraw(bankerScore, playerThirdCardValue) {
         if (playerThirdCardValue === null) return bankerScore <= 5;
         const p3 = playerThirdCardValue;
@@ -823,11 +966,11 @@
         if (bankerScore === 6) return [6, 7].includes(p3);
         return false;
     }
-
     async function runBaccaratGame() {
         const deck = createDeck();
         const pBox = document.getElementById('player-card-box');
         const bBox = document.getElementById('banker-card-box');
+        if(!pBox || !bBox) return;
         pBox.innerHTML = ''; bBox.innerHTML = '';
 
         let pHand = [deck.pop(), deck.pop()];
@@ -837,8 +980,6 @@
         const b1El = createCardElement(bHand[0]); bBox.appendChild(b1El); await delay(350);
         const p2El = createCardElement(pHand[1]); pBox.appendChild(p2El); await delay(350);
         const b2El = createCardElement(bHand[1]); bBox.appendChild(b2El); await delay(500);
-
-        document.getElementById('status-capsule').innerText = "카드 오픈";
 
         p1El.classList.add('flipped'); await delay(400);
         document.getElementById('score-p').innerText = getScore([pHand[0]]); await delay(500);
@@ -854,19 +995,14 @@
         if (pScore < 8 && bScore < 8) {
             let p3Card = null;
             if (pScore <= 5) {
-                document.getElementById('status-capsule').innerText = "PLAYER 3번째 카드";
-                await delay(400);
                 p3Card = deck.pop(); pHand.push(p3Card);
                 const p3El = createCardElement(p3Card); pBox.appendChild(p3El); await delay(450);
                 p3El.classList.add('flipped'); await delay(400);
                 pScore = getScore(pHand);
                 document.getElementById('score-p').innerText = pScore; await delay(600);
             }
-
             const p3Val = p3Card ? p3Card.val : null;
             if (shouldBankerDraw(bScore, p3Val)) {
-                document.getElementById('status-capsule').innerText = "BANKER 3번째 카드";
-                await delay(400);
                 const b3Card = deck.pop(); bHand.push(b3Card);
                 const b3El = createCardElement(b3Card); bBox.appendChild(b3El); await delay(450);
                 b3El.classList.add('flipped'); await delay(400);
@@ -874,10 +1010,8 @@
                 document.getElementById('score-b').innerText = bScore; await delay(600);
             }
         }
-
         settleRound(pScore, bScore, pHand, bHand);
     }
-
     async function settleRound(pScore, bScore, pHand, bHand) {
         let win = 'TIE';
         if (pScore > bScore) win = 'PLAYER';
@@ -896,7 +1030,6 @@
             if (bets.TIE > 0) winPayout += bets.TIE * 9;
             winPayout += bets.PLAYER + bets.BANKER;
         }
-
         if (isPPair && bets.P_PAIR > 0) winPayout += bets.P_PAIR * 12;
         if (isBPair && bets.B_PAIR > 0) winPayout += bets.B_PAIR * 12;
         if (isPerfPair && bets.PERFECT_PAIR > 0) winPayout += bets.PERFECT_PAIR * 26;
@@ -906,14 +1039,10 @@
 
         document.getElementById('paid-val').innerText = Math.floor(winPayout).toLocaleString();
         updateUIValues();
-
-        // 게임 승패 결과 및 보유금 변경 즉시 서버 동기화
         await updateServerData(0);
-
         showResultEffect(win, netProfit, totalBet);
         updateBigRoad(win, true);
     }
-
     function updateBigRoad(result, autoScroll = true) {
         if (result === 'TIE') {
             if (lastWinner !== null) {
@@ -922,7 +1051,6 @@
             }
             return;
         }
-
         if (lastWinner === null) { currentCol = 0; currentRow = 0; }
         else if (lastWinner === result) {
             if (currentRow < 5 && !roadMatrix[`${currentCol}_${currentRow + 1}`]) currentRow++;
@@ -931,7 +1059,6 @@
             currentCol++; currentRow = 0;
             while (roadMatrix[`${currentCol}_${currentRow}`]) currentCol++;
         }
-
         lastWinner = result;
         roadMatrix[`${currentCol}_${currentRow}`] = { winner: result };
 
@@ -943,15 +1070,14 @@
             if (autoScroll) scrollToLatestRoad();
         }
     }
-
     function showResultEffect(win, netProfit, totalBet) {
         const overlay = document.getElementById('result-overlay');
         const title = document.getElementById('result-title');
         const profitContainer = document.getElementById('profit-container');
+        if(!overlay) return;
 
         title.className = `result-title result-${win[0]}`;
         title.innerText = `${win} WIN!`;
-
         profitContainer.innerHTML = '';
         if (totalBet > 0) {
             const pop = document.createElement('div');
@@ -959,12 +1085,9 @@
             pop.innerText = netProfit >= 0 ? `+₩${Math.floor(netProfit).toLocaleString()}` : `-₩${Math.floor(Math.abs(netProfit)).toLocaleString()}`;
             profitContainer.appendChild(pop);
         }
-
         overlay.classList.add('show');
-        document.getElementById('status-capsule').innerText = `${win} 승리!`;
         setTimeout(() => overlay.classList.remove('show'), 1800);
     }
-
     function formatBetText(amount) {
         if (amount >= 10000) {
             const wan = amount / 10000;
@@ -975,70 +1098,62 @@
         }
         return `${amount}`;
     }
-
     async function placeBet(type) {
         if (!isBettingOpen) return;
         let betAmount = selectedChip === 'ALLIN' ? cash : selectedChip;
-
         if (cash < betAmount || betAmount <= 0) {
-            alert("보유금이 부족합니다. 사이드바(메뉴)에서 출금 후 이용해주세요.");
+            alert("보유금이 부족합니다.");
             return;
         }
-
         cash -= betAmount;
         bets[type] = (bets[type] || 0) + betAmount;
-
         const totalBet = Object.values(bets).reduce((a, b) => a + b, 0);
         document.getElementById('cash-val').innerText = Math.floor(cash).toLocaleString();
         document.getElementById('bet-val').innerText = Math.floor(totalBet).toLocaleString();
-
         const chipEl = document.getElementById(`chip-${type}`);
         const valEl = document.getElementById(`val-${type}`);
         if (chipEl && valEl) {
             chipEl.style.display = 'flex';
             valEl.innerText = formatBetText(bets[type]);
         }
-
-        // 배팅 시점에도 보유금 변동 즉시 서버 반영
         await updateServerData(0);
     }
-
     async function resetCurrentBets() {
         if (!isBettingOpen) return;
         const totalBet = Object.values(bets).reduce((a, b) => a + b, 0);
         if (totalBet === 0) return;
-
         cash += totalBet;
         bets = { PLAYER: 0, BANKER: 0, TIE: 0, P_PAIR: 0, B_PAIR: 0, PERFECT_PAIR: 0 };
-
         document.getElementById('cash-val').innerText = Math.floor(cash).toLocaleString();
         document.getElementById('bet-val').innerText = '0';
         document.querySelectorAll('.chip-placed').forEach(c => c.style.display = 'none');
-
         await updateServerData(0);
     }
-
     function selectChip(val, el) {
         selectedChip = val;
         document.querySelectorAll('.chip-btn').forEach(c => c.classList.remove('active'));
         el.classList.add('active');
     }
-
     function setZoneDisabled(disabled) {
         document.querySelectorAll('.bet-zone, .pair-spot').forEach(z => {
             if (disabled) z.classList.add('disabled');
             else z.classList.remove('disabled');
         });
     }
-
     function resetBoard() {
         bets = { PLAYER: 0, BANKER: 0, TIE: 0, P_PAIR: 0, B_PAIR: 0, PERFECT_PAIR: 0 };
-        document.getElementById('player-card-box').innerHTML = '';
-        document.getElementById('banker-card-box').innerHTML = '';
-        document.getElementById('score-p').innerText = '-';
-        document.getElementById('score-b').innerText = '-';
-        document.getElementById('bet-val').innerText = '0';
-        document.getElementById('paid-val').innerText = '0';
+        const pBox = document.getElementById('player-card-box');
+        const bBox = document.getElementById('banker-card-box');
+        if(pBox) pBox.innerHTML = '';
+        if(bBox) bBox.innerHTML = '';
+        const sp = document.getElementById('score-p');
+        const sb = document.getElementById('score-b');
+        const bv = document.getElementById('bet-val');
+        const pv = document.getElementById('paid-val');
+        if(sp) sp.innerText = '-';
+        if(sb) sb.innerText = '-';
+        if(bv) bv.innerText = '0';
+        if(pv) pv.innerText = '0';
         document.querySelectorAll('.chip-placed').forEach(c => c.style.display = 'none');
     }
 </script>
