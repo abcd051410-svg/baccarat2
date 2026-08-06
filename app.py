@@ -4,6 +4,7 @@ from flask import Flask, jsonify, render_template, request
 
 app = Flask(__name__)
 
+# 환경 변수에서만 가져오도록 수정 (코드 내에 한글/특수문자 제거)
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
 
@@ -12,32 +13,24 @@ def get_db_connection():
 
 
 def init_db():
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS users (
-                username VARCHAR(50) PRIMARY KEY,
-                password VARCHAR(100) NOT NULL,
-                cash BIGINT DEFAULT 50000,
-                game_cash BIGINT DEFAULT 0,
-                total_rolling BIGINT DEFAULT 0,
-                initial_withdraw BIGINT DEFAULT 0,
-                current_rolling BIGINT DEFAULT 0,
-                profit_rate REAL DEFAULT 0.0,
-                last_attendance VARCHAR(20) DEFAULT ''
-            )
-        """)
-        conn.commit()
-        cursor.close()
-        conn.close()
-    except Exception as e:
-        print(f"Database initialization error: {e}")
-
-
-# 앱이 시작될 때 테이블 자동 생성 (Gunicorn 환경에서도 실행됨)
-with app.app_context():
-    init_db()
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            username VARCHAR(50) PRIMARY KEY,
+            password VARCHAR(100) NOT NULL,
+            cash BIGINT DEFAULT 50000,
+            game_cash BIGINT DEFAULT 0,
+            total_rolling BIGINT DEFAULT 0,
+            initial_withdraw BIGINT DEFAULT 0,
+            current_rolling BIGINT DEFAULT 0,
+            profit_rate REAL DEFAULT 0.0,
+            last_attendance VARCHAR(20) DEFAULT ''
+        )
+    """)
+    conn.commit()
+    cursor.close()
+    conn.close()
 
 
 @app.route("/api/register", methods=["POST"])
@@ -241,4 +234,5 @@ def index():
 
 
 if __name__ == "__main__":
+    init_db()
     app.run(host="0.0.0.0", port=5000, debug=True)
