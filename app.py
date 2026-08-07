@@ -653,10 +653,10 @@ def house_collect():
         )
         if amount > 0:
             kind = "하우수익"
-            note = memo or "유저 손실·수수료 회수"
+            note = (memo + " · 유저 손실→하우 이득") if memo else "유저 손실·수수료 회수"
         else:
             kind = "하우지급"
-            note = memo or "유저 당첨 지급"
+            note = (memo + " · 유저 당첨→하우 지출") if memo else "유저 당첨 지급"
         log_transaction(cursor, ADMIN, kind, amount, new_cash, note)
         conn.commit()
         cursor.close(); conn.close()
