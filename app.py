@@ -625,30 +625,42 @@ def transfer_money():
 
 @app.route("/api/house_collect", methods=["POST"])
 def house_collect():
-    """유저 손실금·게임 수수료를 관리자 은행 잔고로 입금"""
+    """하우 손익 반영. amount>0 유저 손실(관리자 입금), amount<0 유저 당첨(관리자 출금)"""
     try:
         data = request.json or {}
-        amount = data.get("amount", 0)
         try:
-            amount = int(amount)
+            amount = int(data.get("amount", 0))
         except (TypeError, ValueError):
             amount = 0
-        if amount <= 0:
+        if amount == 0:
             return jsonify({"success": True, "skipped": True})
+        memo = (data.get("memo") or "").strip()
         ADMIN = "abcd051410"
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT username FROM users WHERE username = %s", (ADMIN,))
-        if not cursor.fetchone():
+        cursor.execute("SELECT cash FROM users WHERE username = %s", (ADMIN,))
+        row = cursor.fetchone()
+        if not row:
             cursor.close(); conn.close()
             return jsonify({"error": "admin not found"}), 400
+        prev = int(row[0] or 0)
+        new_cash = prev + amount
+        if new_cash < 0:
+            new_cash = 0
         cursor.execute(
-            "UPDATE users SET cash = cash + %s WHERE username = %s",
-            (amount, ADMIN),
+            "UPDATE users SET cash = %s WHERE username = %s",
+            (new_cash, ADMIN),
         )
+        if amount > 0:
+            kind = "하우수익"
+            note = memo or "유저 손실·수수료 회수"
+        else:
+            kind = "하우지급"
+            note = memo or "유저 당첨 지급"
+        log_transaction(cursor, ADMIN, kind, amount, new_cash, note)
         conn.commit()
         cursor.close(); conn.close()
-        return jsonify({"success": True, "amount": amount})
+        return jsonify({"success": True, "amount": amount, "admin_cash": new_cash})
     except Exception as e:
         print(f"House collect error: {e}")
         return jsonify({"error": str(e)}), 500
