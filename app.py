@@ -1,10 +1,14 @@
 import os
+import time
 import psycopg2
 from flask import Flask, jsonify, render_template, request
 
 app = Flask(__name__)
-
 DATABASE_URL = os.environ.get("DATABASE_URL")
+
+# 공지 (메모리 저장 — 서버 재시작 시 초기화)
+# 영구 저장이 필요하면 notices 테이블로 분리 가능
+CURRENT_NOTICE = {"id": "", "message": "", "created_at": 0}
 
 
 def get_db_connection():
@@ -17,6 +21,8 @@ def init_db():
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
+
+        # 기본 테이블
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 username VARCHAR(50) PRIMARY KEY,
@@ -27,9 +33,26 @@ def init_db():
                 initial_withdraw BIGINT DEFAULT 0,
                 current_rolling BIGINT DEFAULT 0,
                 profit_rate REAL DEFAULT 0.0,
-                last_attendance VARCHAR(20) DEFAULT ''
+                last_attendance VARCHAR(20) DEFAULT '',
+                display_name VARCHAR(50) DEFAULT '',
+                total_profit BIGINT DEFAULT 0
             )
         """)
+
+        # 기존 DB에 컬럼이 없을 수 있으므로 안전하게 추가
+        for col, typedef in [
+            ("display_name", "VARCHAR(50) DEFAULT ''"),
+            ("total_profit", "BIGINT DEFAULT 0"),
+        ]:
+            try:
+                cursor.execute(f"ALTER TABLE users ADD COLUMN IF NOT EXISTS {col} {typedef}")
+            except Exception:
+                # IF NOT EXISTS 미지원 환경 대비
+                try:
+                    cursor.execute(f"ALTER TABLE users ADD COLUMN {col} {typedef}")
+                except Exception:
+                    pass
+
         conn.commit()
         cursor.close()
         conn.close()
@@ -41,18 +64,23 @@ def init_db():
 @app.route("/api/register", methods=["POST"])
 def register():
     try:
-        data = request.json
+        data = request.json or {}
         username = data.get("username", "").strip()
         password = data.get("password", "").strip()
+        display_name = (
+            data.get("display_name")
+            or data.get("name")
+            or ""
+        ).strip()
 
         if not username or not password:
             return jsonify({"error": "아이디와 비밀번호를 모두 입력해주세요."}), 400
+        if not display_name:
+            return jsonify({"error": "이름을 입력해주세요."}), 400
 
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute(
-            "SELECT username FROM users WHERE username = %s", (username,)
-        )
+        cursor.execute("SELECT username FROM users WHERE username = %s", (username,))
         if cursor.fetchone():
             cursor.close()
             conn.close()
@@ -60,10 +88,14 @@ def register():
 
         cursor.execute(
             """
-            INSERT INTO users (username, password, cash, game_cash, total_rolling, initial_withdraw, current_rolling, profit_rate, last_attendance)
-            VALUES (%s, %s, 50000, 0, 0, 0, 0, 0.0, '')
-        """,
-            (username, password),
+            INSERT INTO users (
+                username, password, cash, game_cash, total_rolling,
+                initial_withdraw, current_rolling, profit_rate, last_attendance,
+                display_name, total_profit
+            )
+            VALUES (%s, %s, 50000, 0, 0, 0, 0, 0.0, '', %s, 0)
+            """,
+            (username, password, display_name),
         )
         conn.commit()
         cursor.close()
@@ -77,7 +109,7 @@ def register():
 @app.route("/api/login", methods=["POST"])
 def login():
     try:
-        data = request.json
+        data = request.json or {}
         username = data.get("username", "").strip()
         password = data.get("password", "").strip()
 
@@ -88,13 +120,14 @@ def login():
         cursor = conn.cursor()
         cursor.execute(
             """
-            SELECT password, cash, game_cash, total_rolling, initial_withdraw, current_rolling, profit_rate, last_attendance 
+            SELECT password, cash, game_cash, total_rolling, initial_withdraw,
+                   current_rolling, profit_rate, last_attendance,
+                   COALESCE(display_name, ''), COALESCE(total_profit, 0)
             FROM users WHERE username = %s
-        """,
+            """,
             (username,),
         )
         row = cursor.fetchone()
-
         if not row:
             cursor.close()
             conn.close()
@@ -109,7 +142,10 @@ def login():
             current_rolling,
             profit_rate,
             last_attendance,
+            display_name,
+            total_profit,
         ) = row
+
         if db_password != password:
             cursor.close()
             conn.close()
@@ -119,6 +155,8 @@ def login():
         conn.close()
         return jsonify({
             "username": username,
+            "display_name": display_name or username,
+            "name": display_name or username,
             "cash": cash,
             "game_cash": game_cash,
             "total_rolling": total_rolling,
@@ -126,6 +164,7 @@ def login():
             "current_rolling": current_rolling,
             "profit_rate": profit_rate,
             "last_attendance": last_attendance,
+            "total_profit": total_profit,
         })
     except Exception as e:
         print(f"Login error: {e}")
@@ -135,7 +174,7 @@ def login():
 @app.route("/api/update", methods=["POST"])
 def update_user():
     try:
-        data = request.json
+        data = request.json or {}
         username = data.get("username")
         cash = data.get("cash")
         game_cash = data.get("game_cash")
@@ -144,21 +183,25 @@ def update_user():
         current_rolling = data.get("current_rolling")
         profit_rate = data.get("profit_rate")
         last_attendance = data.get("last_attendance")
+        total_profit = data.get("total_profit")
+        display_name = data.get("display_name")
 
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute(
             """
             UPDATE users
-            SET cash = %s, 
+            SET cash = %s,
                 game_cash = COALESCE(%s, game_cash),
                 total_rolling = total_rolling + %s,
                 initial_withdraw = COALESCE(%s, initial_withdraw),
                 current_rolling = COALESCE(%s, current_rolling),
                 profit_rate = COALESCE(%s, profit_rate),
-                last_attendance = COALESCE(%s, last_attendance)
+                last_attendance = COALESCE(%s, last_attendance),
+                total_profit = COALESCE(%s, total_profit),
+                display_name = COALESCE(%s, display_name)
             WHERE username = %s
-        """,
+            """,
             (
                 cash,
                 game_cash,
@@ -167,6 +210,8 @@ def update_user():
                 current_rolling,
                 profit_rate,
                 last_attendance,
+                total_profit,
+                display_name,
                 username,
             ),
         )
@@ -189,7 +234,9 @@ def admin_get_users():
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT username, cash, game_cash, total_rolling, initial_withdraw, current_rolling, profit_rate 
+            SELECT username, cash, game_cash, total_rolling, initial_withdraw,
+                   current_rolling, profit_rate,
+                   COALESCE(display_name, ''), COALESCE(total_profit, 0)
             FROM users
         """)
         rows = cursor.fetchall()
@@ -206,6 +253,9 @@ def admin_get_users():
                 "initial_withdraw": r[4],
                 "current_rolling": r[5],
                 "profit_rate": r[6],
+                "display_name": r[7] or r[0],
+                "name": r[7] or r[0],
+                "total_profit": r[8],
             })
         return jsonify(users)
     except Exception as e:
@@ -215,8 +265,9 @@ def admin_get_users():
 
 @app.route("/api/admin/edit", methods=["POST"])
 def admin_edit_user():
+    """금액 설정(덮어쓰기). 프론트 '금액 추가'는 현재 잔액+추가분을 cash로 보냄."""
     try:
-        data = request.json
+        data = request.json or {}
         pw = data.get("pw")
         username = data.get("username")
         new_cash = data.get("cash")
@@ -227,7 +278,8 @@ def admin_edit_user():
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute(
-            "UPDATE users SET cash = %s WHERE username = %s", (new_cash, username)
+            "UPDATE users SET cash = %s WHERE username = %s",
+            (new_cash, username),
         )
         conn.commit()
         cursor.close()
@@ -241,12 +293,11 @@ def admin_edit_user():
 @app.route("/api/admin/delete", methods=["POST"])
 def admin_delete_user():
     try:
-        data = request.json
+        data = request.json or {}
         if data.get("pw") != "3195":
             return jsonify({"error": "Unauthorized"}), 403
 
         username = data.get("username")
-
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("DELETE FROM users WHERE username = %s", (username,))
@@ -257,6 +308,42 @@ def admin_delete_user():
     except Exception as e:
         print(f"Admin delete error: {e}")
         return jsonify({"error": f"서버 통신 오류: {str(e)}"}), 500
+
+
+@app.route("/api/admin/notice", methods=["POST"])
+def admin_send_notice():
+    """관리자 공지 발송 → 전체 유저가 /api/notice 로 수신"""
+    global CURRENT_NOTICE
+    try:
+        data = request.json or {}
+        if data.get("pw") != "3195":
+            return jsonify({"error": "Unauthorized"}), 403
+
+        message = (data.get("message") or "").strip()
+        if not message:
+            return jsonify({"error": "공지 내용이 비어 있습니다."}), 400
+
+        CURRENT_NOTICE = {
+            "id": f"n_{int(time.time() * 1000)}",
+            "message": message,
+            "created_at": int(time.time()),
+        }
+        return jsonify({"success": True, "id": CURRENT_NOTICE["id"]})
+    except Exception as e:
+        print(f"Admin notice error: {e}")
+        return jsonify({"error": f"서버 통신 오류: {str(e)}"}), 500
+
+
+@app.route("/api/notice", methods=["GET"])
+def get_notice():
+    """최신 공지 조회 (프론트 15초 폴링)"""
+    if not CURRENT_NOTICE.get("id"):
+        return jsonify({"id": "", "message": ""})
+    return jsonify({
+        "id": CURRENT_NOTICE["id"],
+        "message": CURRENT_NOTICE["message"],
+        "created_at": CURRENT_NOTICE.get("created_at", 0),
+    })
 
 
 @app.route("/")
