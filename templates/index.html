@@ -1846,6 +1846,156 @@
         color: #fff;
         font-size: .78rem
     }
+
+    .menu-btn {
+        position: relative
+    }
+
+    .menu-unread {
+        display: none;
+        position: absolute;
+        top: -4px;
+        right: -4px;
+        min-width: 16px;
+        height: 16px;
+        padding: 0 4px;
+        border-radius: 8px;
+        background: #ef4444;
+        color: #fff;
+        font-size: .65rem;
+        font-weight: 800;
+        align-items: center;
+        justify-content: center;
+        line-height: 16px
+    }
+
+    .menu-unread.show {
+        display: inline-flex
+    }
+
+    .status-dot {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        margin-right: 5px;
+        vertical-align: middle
+    }
+
+    .status-dot.on {
+        background: #22c55e;
+        box-shadow: 0 0 6px #22c55e
+    }
+
+    .status-dot.off {
+        background: #6b7280
+    }
+
+    .status-label {
+        font-size: .68rem;
+        margin-left: 4px
+    }
+
+    .status-label.on {
+        color: #4ade80
+    }
+
+    .status-label.off {
+        color: #9ca3af
+    }
+
+    .tx-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, .88);
+        z-index: 1065;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 14px;
+        backdrop-filter: blur(5px)
+    }
+
+    .tx-panel {
+        width: 100%;
+        max-width: 420px;
+        max-height: 80vh;
+        background: linear-gradient(165deg, #161218, #0c0a0e);
+        border: 1.5px solid rgba(255, 215, 0, .35);
+        border-radius: 16px;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden
+    }
+
+    .tx-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 14px 16px;
+        border-bottom: 1px solid rgba(255, 255, 255, .08)
+    }
+
+    .tx-header h3 {
+        margin: 0;
+        color: #ffd700;
+        font-size: 1rem
+    }
+
+    .tx-hint {
+        font-size: .72rem;
+        color: #888;
+        padding: 8px 16px 0
+    }
+
+    .tx-list {
+        flex: 1;
+        overflow-y: auto;
+        padding: 10px 12px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px
+    }
+
+    .tx-item {
+        background: rgba(255, 255, 255, .04);
+        border: 1px solid rgba(255, 255, 255, .07);
+        border-radius: 10px;
+        padding: 10px 12px
+    }
+
+    .tx-item-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px
+    }
+
+    .tx-kind {
+        font-weight: 700;
+        font-size: .82rem;
+        color: #eee
+    }
+
+    .tx-amt {
+        font-weight: 800;
+        font-size: .9rem
+    }
+
+    .tx-amt.plus {
+        color: #4ade80
+    }
+
+    .tx-amt.minus {
+        color: #f87171
+    }
+
+    .tx-meta {
+        font-size: .68rem;
+        color: #888;
+        margin-top: 4px;
+        line-height: 1.4
+    }
     </style>
 </head>
 <body>
@@ -1898,7 +2048,7 @@
                 <button onclick="closeMessenger()" style="background:none;border:none;color:#aaa;font-size:1.2rem;cursor:pointer">✕</button>
             </div>
             <div class="msg-new-row">
-                <input type="text" id="msg-new-to" placeholder="아이디로 새 대화">
+                <input type="text" id="msg-new-to" placeholder="이름 또는 아이디로 새 대화">
                 <button onclick="startNewChat()" style="padding:8px 10px;border:none;border-radius:8px;background:#333;color:#ffd700;font-size:.75rem;font-weight:700;cursor:pointer">시작</button>
             </div>
             <div class="msg-body">
@@ -1917,6 +2067,19 @@
             </div>
         </div>
     </div>
+
+    <div class="tx-overlay" id="tx-overlay">
+        <div class="tx-panel">
+            <div class="tx-header">
+                <h3>📋 입출금 기록</h3>
+                <button onclick="closeTxHistory()" style="background:none;border:none;color:#aaa;font-size:1.2rem;cursor:pointer">✕</button>
+            </div>
+            <div class="tx-hint">최근 최대 50건 · 송금·관리자 입출금 내역</div>
+            <div class="tx-list" id="tx-list">
+                <div style="color:#666;text-align:center;padding:24px;font-size:.85rem">불러오는 중...</div>
+            </div>
+        </div>
+    </div>
     <div class="transfer-modal-overlay" id="transfer-modal">
         <div class="transfer-card">
             <h3>💸 송금하기</h3>
@@ -1926,7 +2089,7 @@
                 <b style="color:#fbbf24">수수료 5% (최소 ₩100)</b>
                  → 운영 계좌 귀속
             </div>
-            <input type="text" id="transfer-to" class="login-input" placeholder="받는 아이디" autocomplete="off">
+            <input type="text" id="transfer-to" class="login-input" placeholder="받는 이름 또는 아이디" autocomplete="off">
             <input type="number" id="transfer-amount" class="login-input" placeholder="송금 금액" min="1" oninput="updateTransferFeePreview()">
             <div style="font-size:.75rem;color:#fbbf24;text-align:center" id="transfer-fee-preview">수수료: ₩0</div>
             <input type="password" id="transfer-pw" class="login-input" placeholder="내 비밀번호 확인">
@@ -2033,6 +2196,7 @@
                 <span class="msg-badge" id="msg-badge">0</span>
             </button>
             <button class="sidebar-btn" style="background:rgba(34,197,94,.15);border:1px solid #22c55e;color:#4ade80" onclick="openTransferModal()">💸 송금하기</button>
+            <button class="sidebar-btn" style="background:rgba(168,85,247,.12);border:1px solid #a855f7;color:#c084fc" onclick="openTxHistory()">📋 입출금 기록</button>
             <button class="sidebar-btn admin-open-btn" id="admin-menu-btn" style="display:none" onclick="openAdminPanel()">관리자 모드</button>
             <button class="sidebar-btn logout-btn" onclick="handleDeleteAccount()" style="background:rgba(120,40,40,.25);border-color:#a33;color:#fca5a5">회원 탈퇴</button>
             <button class="sidebar-btn logout-btn" onclick="handleLogout()">로그아웃</button>
@@ -2041,7 +2205,10 @@
     <div class="screen active" id="screen-lobby">
         <div class="header-bar">
             <div class="header-title" id="header-nickname">ROYAL CASINO</div>
-            <button class="menu-btn" onclick="toggleSidebar(true)">메뉴</button>
+            <button class="menu-btn" onclick="toggleSidebar(true)">
+                메뉴
+                <span class="menu-unread" data-menu-unread>0</span>
+            </button>
         </div>
         <div class="lobby-hero">
             <h1>ROYAL CASINO</h1>
@@ -2121,7 +2288,10 @@
             <div class="header-title">🃏 바카라</div>
             <div style="display:flex;gap:6px">
                 <button class="back-btn" onclick="exitToLobby()">⬅ 로비</button>
-                <button class="menu-btn" onclick="toggleSidebar(true)">메뉴</button>
+                <button class="menu-btn" onclick="toggleSidebar(true)">
+                    메뉴
+                    <span class="menu-unread" data-menu-unread>0</span>
+                </button>
             </div>
         </div>
         <div class="stage-area">
@@ -2241,7 +2411,10 @@
             <div class="header-title">🐉 용호</div>
             <div style="display:flex;gap:6px">
                 <button class="back-btn" onclick="exitToLobby()">⬅ 로비</button>
-                <button class="menu-btn" onclick="toggleSidebar(true)">메뉴</button>
+                <button class="menu-btn" onclick="toggleSidebar(true)">
+                    메뉴
+                    <span class="menu-unread" data-menu-unread>0</span>
+                </button>
             </div>
         </div>
         <div class="stage-area">
@@ -2345,7 +2518,10 @@
             <div class="header-title">🔼 하이로우</div>
             <div style="display:flex;gap:6px">
                 <button class="back-btn" onclick="exitToLobby()">⬅ 로비</button>
-                <button class="menu-btn" onclick="toggleSidebar(true)">메뉴</button>
+                <button class="menu-btn" onclick="toggleSidebar(true)">
+                    메뉴
+                    <span class="menu-unread" data-menu-unread>0</span>
+                </button>
             </div>
         </div>
         <div class="hl-stage">
@@ -2394,7 +2570,10 @@
             <div class="header-title">🎡 룰렛</div>
             <div style="display:flex;gap:6px">
                 <button class="back-btn" onclick="exitToLobby()">⬅ 로비</button>
-                <button class="menu-btn" onclick="toggleSidebar(true)">메뉴</button>
+                <button class="menu-btn" onclick="toggleSidebar(true)">
+                    메뉴
+                    <span class="menu-unread" data-menu-unread>0</span>
+                </button>
             </div>
         </div>
         <div class="rl-stage">
@@ -2436,7 +2615,10 @@
             <div class="header-title">🂡 블랙잭</div>
             <div style="display:flex;gap:6px">
                 <button class="back-btn" onclick="exitToLobby()">⬅ 로비</button>
-                <button class="menu-btn" onclick="toggleSidebar(true)">메뉴</button>
+                <button class="menu-btn" onclick="toggleSidebar(true)">
+                    메뉴
+                    <span class="menu-unread" data-menu-unread>0</span>
+                </button>
             </div>
         </div>
         <div class="bj-stage">
@@ -2485,7 +2667,10 @@
             <div class="header-title">🎰 럭키 슬롯</div>
             <div style="display:flex;gap:6px">
                 <button class="back-btn" onclick="exitToLobby()">⬅ 로비</button>
-                <button class="menu-btn" onclick="toggleSidebar(true)">메뉴</button>
+                <button class="menu-btn" onclick="toggleSidebar(true)">
+                    메뉴
+                    <span class="menu-unread" data-menu-unread>0</span>
+                </button>
             </div>
         </div>
         <div class="slot-stage">
@@ -2520,7 +2705,10 @@
             <div class="header-title">🎲 주사위 홀짝</div>
             <div style="display:flex;gap:6px">
                 <button class="back-btn" onclick="exitToLobby()">⬅ 로비</button>
-                <button class="menu-btn" onclick="toggleSidebar(true)">메뉴</button>
+                <button class="menu-btn" onclick="toggleSidebar(true)">
+                    메뉴
+                    <span class="menu-unread" data-menu-unread>0</span>
+                </button>
             </div>
         </div>
         <div class="dice-stage">
@@ -2703,6 +2891,8 @@
         setInterval(checkNotice, 15000);
         setInterval(refreshMyBalance, 12000);
         setInterval(pollUnreadBadge, 10000);
+        setInterval(sendHeartbeat, 30000);
+        sendHeartbeat();
         setTimeout(() => {
             if (!localStorage.getItem('seen_reward_notice')) {
                 showLocalNotice('🏆 랭킹 보상 안내\n\n총 수익 랭킹 기준으로 보상이 지급됩니다.\n\n🥇 1등 — ₩20,000\n🥈 2등 — ₩10,000\n🥉 3등 — ₩5,000\n\n※ 지급 시점 및 기준은 운영 정책에 따릅니다.\n건전한 플레이 부탁드립니다.');
@@ -2852,6 +3042,7 @@
         if (ab)
             ab.style.display = (currentUser === 'abcd051410') ? 'block' : 'none';
         pollUnreadBadge();
+        sendHeartbeat();
         updateUIValues();
         updateCloseButtonState();
         syncAllCashUI();
@@ -3064,7 +3255,9 @@
                 val = u.total_rolling || 0;
             const color = val >= 0 ? '#4ade80' : '#ef4444';
             const sign = val < 0 ? '-' : '';
-            item.innerHTML = '<div class="admin-user-top"><div><div style="font-weight:800;color:#ffd700">' + (i + 1) + '위. ' + name + isMe + '</div><div class="admin-user-meta">@' + u.username + '</div></div><div style="font-weight:800;color:' + color + '">' + sign + '₩' + Math.abs(Math.floor(val)).toLocaleString() + '</div></div>';
+            const on = !!u.online;
+            const st = '<span class="status-dot ' + (on ? 'on' : 'off') + '"></span><span class="status-label ' + (on ? 'on' : 'off') + '">' + (on ? '온라인' : '오프라인') + '</span>';
+            item.innerHTML = '<div class="admin-user-top"><div><div style="font-weight:800;color:#ffd700">' + (i + 1) + '위. ' + name + isMe + '</div><div class="admin-user-meta">' + st + ' · @' + u.username + '</div></div><div style="font-weight:800;color:' + color + '">' + sign + '₩' + Math.abs(Math.floor(val)).toLocaleString() + '</div></div>';
             c.appendChild(item);
         });
     }
@@ -4871,7 +5064,8 @@
                 d.className = 'msg-peer' + (msgPeer === p.username ? ' active' : '');
                 d.onclick = () => openMsgThread(p.username, p.display_name);
                 const badge = p.unread > 0 ? '<span class="msg-badge show">' + p.unread + '</span>' : '';
-                d.innerHTML = '<div class="msg-peer-name"><span>' + (p.display_name || p.username) + '</span>' + badge + '</div><div class="msg-peer-sub">@' + p.username + '</div>';
+                const on = !!p.online;
+                d.innerHTML = '<div class="msg-peer-name"><span><span class="status-dot ' + (on ? 'on' : 'off') + '"></span>' + (p.display_name || p.username) + '</span>' + badge + '</div><div class="msg-peer-sub">' + (on ? '온라인' : '오프라인') + ' · @' + p.username + '</div>';
                 box.appendChild(d);
             });
         } catch (e) {}
@@ -4959,16 +5153,25 @@
     }
     function updateMsgBadge(n) {
         const b = document.getElementById('msg-badge');
-        if (!b)
-            return;
-        if (n > 0) {
-            b.innerText = n > 99 ? '99+' : String(n);
-            b.classList.add('show');
+        const txt = n > 99 ? '99+' : String(n || 0);
+        if (b) {
+            if (n > 0) {
+                b.innerText = txt;
+                b.classList.add('show');
+            } else {
+                b.classList.remove('show');
+                b.innerText = '0';
+            }
         }
-        else {
-            b.classList.remove('show');
-            b.innerText = '0';
-        }
+        document.querySelectorAll('[data-menu-unread]').forEach(el => {
+            if (n > 0) {
+                el.innerText = txt;
+                el.classList.add('show');
+            } else {
+                el.classList.remove('show');
+                el.innerText = '0';
+            }
+        });
     }
     async function pollUnreadBadge() {
         if (!currentUser)
@@ -4980,6 +5183,66 @@
             const d = await res.json();
             updateMsgBadge(d.count || 0);
         } catch (e) {}
+    }
+
+
+    async function sendHeartbeat() {
+        if (!currentUser)
+            return;
+        try {
+            await fetch('/api/heartbeat', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    username: currentUser
+                })
+            });
+        } catch (e) {}
+    }
+
+
+    function openTxHistory() {
+        toggleSidebar(false);
+        document.getElementById('tx-overlay').style.display = 'flex';
+        loadTxHistory();
+    }
+    function closeTxHistory() {
+        document.getElementById('tx-overlay').style.display = 'none';
+    }
+    async function loadTxHistory() {
+        const list = document.getElementById('tx-list');
+        if (!currentUser) {
+            list.innerHTML = '<div style="color:#666;text-align:center;padding:24px">로그인이 필요합니다</div>';
+            return;
+        }
+        list.innerHTML = '<div style="color:#666;text-align:center;padding:24px;font-size:.85rem">불러오는 중...</div>';
+        try {
+            const res = await fetch('/api/transactions?user=' + encodeURIComponent(currentUser) + '&limit=50');
+            const data = await res.json();
+            if (!res.ok) {
+                list.innerHTML = '<div style="color:#f87171;text-align:center;padding:24px">' + (data.error || '오류') + '</div>';
+                return;
+            }
+            const items = data.items || [];
+            if (!items.length) {
+                list.innerHTML = '<div style="color:#666;text-align:center;padding:28px;font-size:.85rem">기록이 없습니다</div>';
+                return;
+            }
+            list.innerHTML = '';
+            items.forEach(t => {
+                const amt = t.amount || 0;
+                const plus = amt >= 0;
+                const d = document.createElement('div');
+                d.className = 'tx-item';
+                const time = (t.created_at || '').replace('T', ' ').slice(0, 19);
+                d.innerHTML = '<div class="tx-item-top"><span class="tx-kind">' + escapeHtml(t.kind || '') + '</span><span class="tx-amt ' + (plus ? 'plus' : 'minus') + '">' + (plus ? '+' : '-') + '₩' + Math.abs(amt).toLocaleString() + '</span></div><div class="tx-meta">' + escapeHtml(t.memo || '') + (t.memo ? ' · ' : '') + time + (t.balance_after != null ? ' · 잔고 ₩' + Number(t.balance_after).toLocaleString() : '') + '</div>';
+                list.appendChild(d);
+            });
+        } catch (e) {
+            list.innerHTML = '<div style="color:#f87171;text-align:center;padding:24px">서버 오류</div>';
+        }
     }
     </script>
 </body>
