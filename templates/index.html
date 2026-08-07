@@ -1670,26 +1670,28 @@
     .msg-overlay {
         position: fixed;
         inset: 0;
-        background: rgba(0, 0, 0, .88);
+        background: rgba(0, 0, 0, .9);
         z-index: 1060;
         display: none;
         align-items: center;
         justify-content: center;
-        padding: 12px;
-        backdrop-filter: blur(5px)
+        padding: 10px;
+        box-sizing: border-box
     }
 
     .msg-panel {
         width: 100%;
-        max-width: 420px;
-        height: min(78vh, 620px);
+        max-width: 440px;
+        height: min(82vh, 640px);
+        max-height: calc(100vh - 20px);
         background: linear-gradient(165deg, #1a1016, #0e0a0c);
         border: 1.5px solid rgba(255, 215, 0, .35);
         border-radius: 16px;
         display: flex;
         flex-direction: column;
         overflow: hidden;
-        box-shadow: 0 20px 50px rgba(0, 0, 0, .55)
+        box-shadow: 0 20px 50px rgba(0, 0, 0, .55);
+        box-sizing: border-box
     }
 
     .msg-header {
@@ -1698,7 +1700,8 @@
         justify-content: space-between;
         padding: 12px 14px;
         border-bottom: 1px solid rgba(255, 255, 255, .08);
-        background: rgba(0, 0, 0, .25)
+        background: rgba(0, 0, 0, .3);
+        flex-shrink: 0
     }
 
     .msg-header h3 {
@@ -1707,28 +1710,52 @@
         font-size: .95rem
     }
 
+    .msg-new-row {
+        display: flex;
+        gap: 6px;
+        padding: 8px 10px;
+        border-bottom: 1px solid rgba(255, 255, 255, .06);
+        flex-shrink: 0
+    }
+
+    .msg-new-row input {
+        flex: 1;
+        min-width: 0;
+        padding: 8px;
+        border-radius: 8px;
+        border: 1px solid rgba(255, 255, 255, .12);
+        background: rgba(0, 0, 0, .3);
+        color: #fff;
+        font-size: .78rem
+    }
+
     .msg-body {
         flex: 1;
         display: flex;
-        min-height: 0
+        min-height: 0;
+        overflow: hidden
     }
 
     .msg-peers {
-        width: 38%;
+        width: 36%;
+        min-width: 100px;
+        max-width: 140px;
         border-right: 1px solid rgba(255, 255, 255, .08);
         overflow-y: auto;
-        background: rgba(0, 0, 0, .2)
+        overflow-x: hidden;
+        background: rgba(0, 0, 0, .25);
+        -webkit-overflow-scrolling: touch
     }
 
     .msg-peer {
         padding: 10px 8px;
         cursor: pointer;
         border-bottom: 1px solid rgba(255, 255, 255, .05);
-        font-size: .78rem
+        font-size: .75rem
     }
 
     .msg-peer:hover, .msg-peer.active {
-        background: rgba(255, 215, 0, .08)
+        background: rgba(255, 215, 0, .1)
     }
 
     .msg-peer-name {
@@ -1737,12 +1764,21 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 4px
+        gap: 4px;
+        overflow: hidden
+    }
+
+    .msg-peer-name span:first-child {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        flex: 1;
+        min-width: 0
     }
 
     .msg-peer-sub {
         color: #777;
-        font-size: .68rem;
+        font-size: .65rem;
         margin-top: 2px;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -1753,25 +1789,31 @@
         flex: 1;
         display: flex;
         flex-direction: column;
-        min-width: 0
+        min-width: 0;
+        min-height: 0;
+        overflow: hidden
     }
 
     .msg-thread {
         flex: 1;
         overflow-y: auto;
+        overflow-x: hidden;
         padding: 12px;
         display: flex;
         flex-direction: column;
-        gap: 8px
+        gap: 8px;
+        -webkit-overflow-scrolling: touch;
+        min-height: 0
     }
 
     .msg-bubble {
-        max-width: 85%;
+        max-width: 88%;
         padding: 8px 11px;
         border-radius: 12px;
         font-size: .8rem;
         line-height: 1.45;
-        word-break: break-word
+        word-break: break-word;
+        overflow-wrap: anywhere
     }
 
     .msg-bubble.me {
@@ -1798,11 +1840,14 @@
         display: flex;
         gap: 6px;
         padding: 10px;
-        border-top: 1px solid rgba(255, 255, 255, .08)
+        border-top: 1px solid rgba(255, 255, 255, .08);
+        flex-shrink: 0;
+        background: rgba(0, 0, 0, .2)
     }
 
     .msg-compose input {
         flex: 1;
+        min-width: 0;
         padding: 10px;
         border-radius: 10px;
         border: 1px solid rgba(255, 255, 255, .12);
@@ -1813,28 +1858,34 @@
     }
 
     .msg-compose button {
-        padding: 10px 14px;
+        padding: 10px 12px;
         border: none;
         border-radius: 10px;
         background: linear-gradient(135deg, #eab308, #ca8a04);
         color: #111;
         font-weight: 800;
         cursor: pointer;
-        font-size: .8rem
+        font-size: .78rem;
+        white-space: nowrap;
+        flex-shrink: 0
     }
 
     .msg-empty {
         color: #666;
         text-align: center;
-        padding: 30px 12px;
+        padding: 24px 10px;
         font-size: .8rem
     }
 
-    .msg-new-row {
-        display: flex;
-        gap: 6px;
-        padding: 8px;
-        border-bottom: 1px solid rgba(255, 255, 255, .06)
+    @media (max-width: 380px) {
+        .msg-peers {
+            width: 32%;
+            min-width: 88px
+        }
+
+        .msg-panel {
+            height: min(88vh, 640px)
+        }
     }
 
     .msg-new-row input {
@@ -2074,7 +2125,7 @@
                 <h3>📋 입출금 기록</h3>
                 <button onclick="closeTxHistory()" style="background:none;border:none;color:#aaa;font-size:1.2rem;cursor:pointer">✕</button>
             </div>
-            <div class="tx-hint">최근 최대 50건 · 송금·관리자 입출금 내역</div>
+            <div class="tx-hint">최근 최대 50건 · 송금·관리자·하우 손익 포함</div>
             <div class="tx-list" id="tx-list">
                 <div style="color:#666;text-align:center;padding:24px;font-size:.85rem">불러오는 중...</div>
             </div>
@@ -2888,10 +2939,10 @@
             await autoLogin(saved);
         } else
             document.getElementById('login-overlay').style.display = 'flex';
-        setInterval(checkNotice, 15000);
-        setInterval(refreshMyBalance, 12000);
-        setInterval(pollUnreadBadge, 10000);
-        setInterval(sendHeartbeat, 30000);
+        setInterval(checkNotice, 30000);
+        setInterval(refreshMyBalance, 25000);
+        setInterval(pollUnreadBadge, 20000);
+        setInterval(sendHeartbeat, 45000);
         sendHeartbeat();
         setTimeout(() => {
             if (!localStorage.getItem('seen_reward_notice')) {
@@ -3257,7 +3308,14 @@
             const sign = val < 0 ? '-' : '';
             const on = !!u.online;
             const st = '<span class="status-dot ' + (on ? 'on' : 'off') + '"></span><span class="status-label ' + (on ? 'on' : 'off') + '">' + (on ? '온라인' : '오프라인') + '</span>';
-            item.innerHTML = '<div class="admin-user-top"><div><div style="font-weight:800;color:#ffd700">' + (i + 1) + '위. ' + name + isMe + '</div><div class="admin-user-meta">' + st + ' · @' + u.username + '</div></div><div style="font-weight:800;color:' + color + '">' + sign + '₩' + Math.abs(Math.floor(val)).toLocaleString() + '</div></div>';
+            item.innerHTML = '<div class="admin-user-top"><div><div style="font-weight:800;color:#ffd700;text-decoration:underline;text-underline-offset:3px">' + (i + 1) + '위. ' + name + isMe + '</div><div class="admin-user-meta">' + st + ' · @' + u.username + '</div></div><div style="font-weight:800;color:' + color + '">' + sign + '₩' + Math.abs(Math.floor(val)).toLocaleString() + '</div></div>';
+            item.style.cursor = 'pointer';
+            item.title = '클릭하여 쪽지 보내기';
+            item.onclick = function() {
+                if (u.username === currentUser)
+                    return;
+                openMessengerTo(u.username, u.display_name || u.name || u.username);
+            };
             c.appendChild(item);
         });
     }
@@ -3299,7 +3357,7 @@
             item.className = 'admin-user-item';
             const name = u.display_name || u.name || '-';
             const tp = u.total_profit || 0;
-            item.innerHTML = '<div class="admin-user-top"><div><div style="font-weight:800;color:#ffd700">' + u.username + '</div><div class="admin-user-meta">이름: ' + name + '<br>은행 ₩' + Math.floor(u.cash || 0).toLocaleString() + ' · 게임 ₩' + Math.floor(u.game_cash || 0).toLocaleString() + '<br>총수익 <span style="color:' + (tp >= 0 ? '#4ade80' : '#ef4444') + '">₩' + Math.floor(tp).toLocaleString() + '</span></div></div></div><div class="admin-actions"><button class="admin-action-btn btn-add" onclick="adminAddCash(\'' + u.username + '\',\'' + pw + '\',1)">+ 추가</button><button class="admin-action-btn btn-add" style="background:#7f1d1d;color:#fecaca" onclick="adminAddCash(\'' + u.username + '\',\'' + pw + '\',-1)">- 차감</button><button class="admin-action-btn btn-del" onclick="adminDeleteUser(\'' + u.username + '\',\'' + pw + '\')">삭제</button></div>';
+            item.innerHTML = '<div class="admin-user-top"><div><div style="font-weight:800;color:#ffd700">' + u.username + ' <span class="status-dot ' + (u.online ? 'on' : 'off') + '"></span><span class="status-label ' + (u.online ? 'on' : 'off') + '">' + (u.online ? '온라인' : '오프라인') + '</span></div><div class="admin-user-meta">이름: ' + name + '<br>은행 ₩' + Math.floor(u.cash || 0).toLocaleString() + ' · 게임 ₩' + Math.floor(u.game_cash || 0).toLocaleString() + '<br>총수익 <span style="color:' + (tp >= 0 ? '#4ade80' : '#ef4444') + '">₩' + Math.floor(tp).toLocaleString() + '</span></div></div></div><div class="admin-actions"><button class="admin-action-btn btn-add" onclick="adminAddCash(\'' + u.username + '\',\'' + pw + '\',1)">+ 추가</button><button class="admin-action-btn btn-add" style="background:#7f1d1d;color:#fecaca" onclick="adminAddCash(\'' + u.username + '\',\'' + pw + '\',-1)">- 차감</button><button class="admin-action-btn btn-del" onclick="adminDeleteUser(\'' + u.username + '\',\'' + pw + '\')">삭제</button></div>';
             c.appendChild(item);
         });
     }
@@ -3772,9 +3830,9 @@
         if (isPerf && bets.PERFECT_PAIR > 0)
             pay += bets.PERFECT_PAIR * 26;
         pay = Math.floor(pay);
-        const houseGain = Math.max(0, totalBet - pay);
-        if (houseGain > 0)
-            collectHouse(houseGain);
+        const houseDelta = totalBet - pay;
+        if (houseDelta)
+            collectHouse(houseDelta, "바카라");
         cash = Math.floor(cash + pay);
         checkBrokeReset();
         const paidEl = document.getElementById('paid-val');
@@ -4065,9 +4123,9 @@
             pay += multiHit ? multiPayT : (betsDT.TIGER * 2);
         }
         pay = Math.floor(pay);
-        const houseGainDT = Math.max(0, total - pay);
-        if (houseGainDT > 0)
-            collectHouse(houseGainDT);
+        const houseDeltaDT = total - pay;
+        if (houseDeltaDT)
+            collectHouse(houseDeltaDT, "용호");
         cash = Math.floor(cash + pay);
         checkBrokeReset();
         const dtp = document.getElementById('dt-paid-val');
@@ -4405,6 +4463,9 @@
             alert('챙길 상금 없음');
             return;
         }
+        const net = hlPot - (hlStake || 0);
+        if (net)
+            collectHouse(-net, '하이로우당첨');
         cash += hlPot;
         alert('₩' + hlPot.toLocaleString() + ' 획득! (' + hlStreak + '연승)');
         hlActive = false;
@@ -4598,9 +4659,9 @@
             pay = amt * 2;
         else if (rlBetType === 'low' && num >= 1 && num <= 18)
             pay = amt * 2;
-        const hg = Math.max(0, amt - pay);
-        if (hg > 0)
-            collectHouse(hg);
+        const hg = amt - pay;
+        if (hg)
+            collectHouse(hg, "룰렛");
         cash += pay;
         checkBrokeReset();
         syncAllCashUI();
@@ -4737,9 +4798,9 @@
             msg = '푸시 (무승부)';
         } else
             msg = result === 'bust' ? '버스트... 패배' : '패배';
-        const bjHouse = Math.max(0, bjBet - pay);
-        if (bjHouse > 0)
-            collectHouse(bjHouse);
+        const bjHouse = bjBet - pay;
+        if (bjHouse)
+            collectHouse(bjHouse, "블랙잭");
         cash += pay;
         checkBrokeReset();
         syncAllCashUI();
@@ -4793,9 +4854,9 @@
             document.getElementById('slot-result').innerText = '꽝...';
             document.getElementById('slot-result').style.color = '#ef4444';
         }
-        const slotHouse = Math.max(0, 3000 - prize);
-        if (slotHouse > 0)
-            collectHouse(slotHouse);
+        const slotHouse = 3000 - prize;
+        if (slotHouse)
+            collectHouse(slotHouse, "슬롯");
         cash += prize;
         checkBrokeReset();
         syncAllCashUI();
@@ -4864,10 +4925,11 @@
             const pay = Math.floor(amt * mult);
             cash += pay;
             const profit = pay - amt;
+            collectHouse(amt - pay, '주사위');
             re.innerText = '합 ' + sum + ' — 적중! +₩' + profit.toLocaleString() + ' (×' + mult + ')';
             re.style.color = '#4ade80';
         } else {
-            collectHouse(amt);
+            collectHouse(amt, '주사위');
             re.innerText = '합 ' + sum + ' — 실패';
             re.style.color = '#ef4444';
         }
@@ -4998,9 +5060,9 @@
 
     let msgPeer = null,
         msgPollTimer = null;
-    async function collectHouse(amount) {
-        amount = Math.floor(amount || 0);
-        if (amount <= 0)
+    async function collectHouse(amount, memo) {
+        amount = Math.floor(Number(amount) || 0);
+        if (!amount)
             return;
         try {
             await fetch('/api/house_collect', {
@@ -5009,7 +5071,8 @@
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    amount
+                    amount,
+                    memo: memo || ''
                 })
             });
         } catch (e) {}
@@ -5020,6 +5083,14 @@
         const el = document.getElementById('transfer-fee-preview');
         if (el)
             el.innerText = a > 0 ? ('수수료: ₩' + fee.toLocaleString() + ' · 총 출금 ₩' + (a + fee).toLocaleString()) : '수수료: ₩0';
+    }
+    function openMessengerTo(username, displayName) {
+        openMessenger();
+        if (username) {
+            setTimeout(function() {
+                openMsgThread(username, displayName || username);
+            }, 120);
+        }
     }
     function openMessenger() {
         toggleSidebar(false);
@@ -5033,7 +5104,7 @@
                 if (msgPeer)
                     loadMsgThread(msgPeer, true);
             }
-        }, 8000);
+        }, 15000);
     }
     function closeMessenger() {
         document.getElementById('msg-overlay').style.display = 'none';
