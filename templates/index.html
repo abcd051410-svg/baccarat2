@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>ROYAL CASINO</title>
     <style>
     * {
@@ -2047,6 +2047,79 @@
         margin-top: 4px;
         line-height: 1.4
     }
+
+    html, body {
+        -webkit-text-size-adjust: 100%;
+        touch-action: manipulation;
+        overscroll-behavior: none
+    }
+
+    .deposit-alarm-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        background: rgba(0, 0, 0, .75);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 20px
+    }
+
+    .deposit-alarm-card {
+        background: linear-gradient(160deg, #14532d, #052e16);
+        border: 2px solid #4ade80;
+        border-radius: 16px;
+        padding: 22px 20px;
+        max-width: 340px;
+        width: 100%;
+        text-align: center;
+        box-shadow: 0 0 40px rgba(74, 222, 128, .35);
+        animation: depositPop .35s ease
+    }
+
+    @keyframes depositPop {
+        from {
+            transform: scale(.85);
+            opacity:0
+        }
+
+        to {
+            transform: scale(1);
+            opacity: 1
+        }
+    }
+
+    .deposit-alarm-card h2 {
+        margin: 0 0 8px;
+        color: #4ade80;
+        font-size: 1.15rem
+    }
+
+    .deposit-alarm-card .amt {
+        font-size: 1.6rem;
+        font-weight: 900;
+        color: #fff;
+        margin: 10px 0
+    }
+
+    .deposit-alarm-card p {
+        margin: 0;
+        color: #bbf7d0;
+        font-size: .85rem
+    }
+
+    .deposit-alarm-card button {
+        margin-top: 16px;
+        width: 100%;
+        padding: 12px;
+        border: none;
+        border-radius: 10px;
+        background: #4ade80;
+        color: #052e16;
+        font-weight: 800;
+        font-size: .95rem;
+        cursor: pointer
+    }
     </style>
 </head>
 <body>
@@ -3092,6 +3165,8 @@
         const ab = document.getElementById('admin-menu-btn');
         if (ab)
             ab.style.display = (currentUser === 'abcd051410') ? 'block' : 'none';
+        lastKnownBank = serverCash;
+        lastKnownGame = cash;
         pollUnreadBadge();
         sendHeartbeat();
         updateUIValues();
@@ -3417,8 +3492,20 @@
             });
             const editData = await editRes.json().catch(() => ({}));
             if (username === currentUser) {
+                const prevB = serverCash,
+                    prevG = cash;
                 serverCash = editData.cash != null ? editData.cash : bank;
                 cash = editData.game_cash != null ? editData.game_cash : game;
+                if (sign > 0) {
+                    const dBank = Math.max(0, serverCash - prevB),
+                        dGame = Math.max(0, cash - prevG);
+                    if (dBank)
+                        showDepositAlarm(dBank, '관리자 입금 (은행)');
+                    if (dGame)
+                        showDepositAlarm(dGame, '관리자 입금 (게임)');
+                }
+                lastKnownBank = serverCash;
+                lastKnownGame = cash;
                 updateUIValues();
                 syncAllCashUI();
             }
@@ -3832,7 +3919,7 @@
         pay = Math.floor(pay);
         const houseDelta = totalBet - pay;
         if (houseDelta)
-            collectHouse(houseDelta, "바카라");
+            collectHouse(houseDelta, '바카라 · ' + (currentUser || ''));
         cash = Math.floor(cash + pay);
         checkBrokeReset();
         const paidEl = document.getElementById('paid-val');
@@ -4125,7 +4212,7 @@
         pay = Math.floor(pay);
         const houseDeltaDT = total - pay;
         if (houseDeltaDT)
-            collectHouse(houseDeltaDT, "용호");
+            collectHouse(houseDeltaDT, '용호 · ' + (currentUser || ''));
         cash = Math.floor(cash + pay);
         checkBrokeReset();
         const dtp = document.getElementById('dt-paid-val');
@@ -4184,7 +4271,7 @@
             fee
         });
         if (fee > 0)
-            collectHouse(fee);
+            collectHouse(fee, '용호수수료 · ' + (currentUser || ''));
         document.getElementById('dt-cash-val').innerText = Math.floor(cash).toLocaleString();
         document.getElementById('dt-bet-val').innerText = Math.floor(Object.values(betsDT).reduce((a, b) => a + b, 0)).toLocaleString();
         const chipId = type === 'TIE' ? 'chip-DT_TIE' : 'chip-' + type,
@@ -4442,7 +4529,7 @@
         } else {
             re.innerText = '실패... 상금 소멸';
             re.style.color = '#ef4444';
-            collectHouse(hlStake);
+            collectHouse(hlStake, '하이로우패배 · ' + (currentUser || ''));
             hlActive = false;
             hlPot = 0;
             hlStreak = 0;
@@ -4465,7 +4552,7 @@
         }
         const net = hlPot - (hlStake || 0);
         if (net)
-            collectHouse(-net, '하이로우당첨');
+            collectHouse(-net, '하이로우당첨 · ' + (currentUser || ''));
         cash += hlPot;
         alert('₩' + hlPot.toLocaleString() + ' 획득! (' + hlStreak + '연승)');
         hlActive = false;
@@ -4661,7 +4748,7 @@
             pay = amt * 2;
         const hg = amt - pay;
         if (hg)
-            collectHouse(hg, "룰렛");
+            collectHouse(hg, '룰렛 · ' + (currentUser || ''));
         cash += pay;
         checkBrokeReset();
         syncAllCashUI();
@@ -4800,7 +4887,7 @@
             msg = result === 'bust' ? '버스트... 패배' : '패배';
         const bjHouse = bjBet - pay;
         if (bjHouse)
-            collectHouse(bjHouse, "블랙잭");
+            collectHouse(bjHouse, '블랙잭 · ' + (currentUser || ''));
         cash += pay;
         checkBrokeReset();
         syncAllCashUI();
@@ -4856,7 +4943,7 @@
         }
         const slotHouse = 3000 - prize;
         if (slotHouse)
-            collectHouse(slotHouse, "슬롯");
+            collectHouse(slotHouse, '슬롯 · ' + (currentUser || ''));
         cash += prize;
         checkBrokeReset();
         syncAllCashUI();
@@ -4925,11 +5012,11 @@
             const pay = Math.floor(amt * mult);
             cash += pay;
             const profit = pay - amt;
-            collectHouse(amt - pay, '주사위');
+            collectHouse(amt - pay, '주사위 · ' + (currentUser || ''));
             re.innerText = '합 ' + sum + ' — 적중! +₩' + profit.toLocaleString() + ' (×' + mult + ')';
             re.style.color = '#4ade80';
         } else {
-            collectHouse(amt, '주사위');
+            collectHouse(amt, '주사위 · ' + (currentUser || ''));
             re.innerText = '합 ' + sum + ' — 실패';
             re.style.color = '#ef4444';
         }
@@ -5046,9 +5133,12 @@
             const u = users.find(x => x.username === currentUser);
             if (!u)
                 return;
-            serverCash = u.cash || 0;
+            const newBank = u.cash || 0;
+            const newGame = u.game_cash || 0;
+            watchDepositInflows(newBank, (!hasActiveGameBets() ? newGame : (lastKnownGame != null ? lastKnownGame : newGame)));
+            serverCash = newBank;
             if (!hasActiveGameBets()) {
-                cash = u.game_cash || 0;
+                cash = newGame;
             }
             totalRolling = u.total_rolling || 0;
             totalProfit = u.total_profit || 0;
@@ -5315,6 +5405,67 @@
             list.innerHTML = '<div style="color:#f87171;text-align:center;padding:24px">서버 오류</div>';
         }
     }
+
+
+    let lastKnownBank = null,
+        lastKnownGame = null,
+        depositAlarmQueue = [];
+    function showDepositAlarm(amount, msg) {
+        amount = Math.floor(amount || 0);
+        if (amount <= 0)
+            return;
+        const ov = document.getElementById('deposit-alarm-overlay');
+        const amtEl = document.getElementById('deposit-alarm-amt');
+        const msgEl = document.getElementById('deposit-alarm-msg');
+        if (!ov) {
+            alert('💰 입금 알림\n+₩' + amount.toLocaleString() + (msg ? '\n' + msg : ''));
+            return;
+        }
+        amtEl.innerText = '+₩' + amount.toLocaleString();
+        msgEl.innerText = msg || '계좌에 입금되었습니다';
+        ov.style.display = 'flex';
+        try {
+            if (navigator.vibrate)
+                navigator.vibrate([80, 40, 80]);
+        } catch (e) {}
+    }
+    function closeDepositAlarm() {
+        const ov = document.getElementById('deposit-alarm-overlay');
+        if (ov)
+            ov.style.display = 'none';
+    }
+    function watchDepositInflows(bank, game) {
+        if (lastKnownBank !== null && bank > lastKnownBank) {
+            showDepositAlarm(bank - lastKnownBank, '은행 잔고에 입금되었습니다');
+        }
+        if (lastKnownGame !== null && game > lastKnownGame) {
+            showDepositAlarm(game - lastKnownGame, '게임 머니가 충전되었습니다');
+        }
+        lastKnownBank = bank;
+        lastKnownGame = game;
+    }
+    (function preventDoubleTapZoom() {
+        document.addEventListener('gesturestart', function(e) {
+            e.preventDefault();
+        }, {
+            passive: false
+        });
+        document.addEventListener('gesturechange', function(e) {
+            e.preventDefault();
+        }, {
+            passive: false
+        });
+        let lastTouchEnd = 0;
+        document.addEventListener('touchend', function(e) {
+            const now = Date.now();
+            if (now - lastTouchEnd <= 350) {
+                e.preventDefault();
+            }
+            lastTouchEnd = now;
+        }, {
+            passive: false
+        });
+    })();
     </script>
 </body>
 </html>
