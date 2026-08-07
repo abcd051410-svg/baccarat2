@@ -27,7 +27,7 @@ def init_db():
             CREATE TABLE IF NOT EXISTS users (
                 username VARCHAR(50) PRIMARY KEY,
                 password VARCHAR(100) NOT NULL,
-                cash BIGINT DEFAULT 50000,
+                cash BIGINT DEFAULT 200000,
                 game_cash BIGINT DEFAULT 0,
                 total_rolling BIGINT DEFAULT 0,
                 initial_withdraw BIGINT DEFAULT 0,
@@ -93,7 +93,7 @@ def register():
                 initial_withdraw, current_rolling, profit_rate, last_attendance,
                 display_name, total_profit
             )
-            VALUES (%s, %s, 50000, 0, 0, 0, 0, 0.0, '', %s, 0)
+            VALUES (%s, %s, 200000, 0, 0, 0, 0, 0.0, '', %s, 0)
             """,
             (username, password, display_name),
         )
@@ -227,8 +227,8 @@ def update_user():
 @app.route("/api/admin/users", methods=["GET"])
 def admin_get_users():
     try:
-        pw = request.args.get("pw")
-        if pw != "3195":
+        pw = request.args.get("pw") or request.args.get("admin_user") or ""
+        if pw != "abcd051410":
             return jsonify({"error": "Unauthorized"}), 403
 
         conn = get_db_connection()
@@ -272,7 +272,7 @@ def admin_edit_user():
         username = data.get("username")
         new_cash = data.get("cash")
 
-        if pw != "3195":
+        if (pw != "abcd051410") and (data.get("admin_user") != "abcd051410"):
             return jsonify({"error": "Unauthorized"}), 401
 
         conn = get_db_connection()
@@ -294,7 +294,7 @@ def admin_edit_user():
 def admin_delete_user():
     try:
         data = request.json or {}
-        if data.get("pw") != "3195":
+        if data.get("pw") != "abcd051410" and data.get("admin_user") != "abcd051410":
             return jsonify({"error": "Unauthorized"}), 403
 
         username = data.get("username")
@@ -316,7 +316,7 @@ def admin_send_notice():
     global CURRENT_NOTICE
     try:
         data = request.json or {}
-        if data.get("pw") != "3195":
+        if data.get("pw") != "abcd051410" and data.get("admin_user") != "abcd051410":
             return jsonify({"error": "Unauthorized"}), 403
 
         message = (data.get("message") or "").strip()
@@ -349,6 +349,52 @@ def get_notice():
 @app.route("/")
 def index():
     return render_template("index.html")
+
+
+
+@app.route("/api/delete_account", methods=["POST"])
+def delete_account():
+    try:
+        data = request.json or {}
+        username = (data.get("username") or "").strip()
+        password = (data.get("password") or "").strip()
+        if not username or not password:
+            return jsonify({"error": "아이디와 비밀번호를 입력해주세요."}), 400
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT password FROM users WHERE username = %s", (username,))
+        row = cursor.fetchone()
+        if not row:
+            cursor.close(); conn.close()
+            return jsonify({"error": "존재하지 않는 계정입니다."}), 400
+        if row[0] != password:
+            cursor.close(); conn.close()
+            return jsonify({"error": "비밀번호가 일치하지 않습니다."}), 400
+        cursor.execute("DELETE FROM users WHERE username = %s", (username,))
+        conn.commit()
+        cursor.close(); conn.close()
+        return jsonify({"success": True})
+    except Exception as e:
+        print(f"Delete account error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/admin/reset_ranking", methods=["POST"])
+def admin_reset_ranking():
+    try:
+        data = request.json or {}
+        admin_user = data.get("admin_user") or data.get("pw") or ""
+        if admin_user != "abcd051410":
+            return jsonify({"error": "Unauthorized"}), 401
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("UPDATE users SET total_profit = 0, total_rolling = 0")
+        conn.commit()
+        cursor.close(); conn.close()
+        return jsonify({"success": True})
+    except Exception as e:
+        print(f"Reset ranking error: {e}")
+        return jsonify({"error": str(e)}), 500
 
 
 if __name__ == "__main__":
