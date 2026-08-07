@@ -1573,6 +1573,279 @@
     .label-t {
         color: #facc15 !important
     }
+
+    .pin-notice {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 900;
+        background: linear-gradient(90deg, #7c2d12, #b45309);
+        color: #fff;
+        padding: 10px 40px 10px 14px;
+        font-size: .82rem;
+        line-height: 1.4;
+        display: none;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, .4);
+        text-align: center
+    }
+
+    .pin-notice.show {
+        display: block
+    }
+
+    .pin-notice-close {
+        position: absolute;
+        right: 8px;
+        top: 50%;
+        transform: translateY(-50%);
+        background: rgba(0, 0, 0, .25);
+        border: none;
+        color: #fff;
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        cursor: pointer;
+        font-size: 1rem;
+        line-height: 1
+    }
+
+    .transfer-modal-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, .88);
+        z-index: 1050;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 16px;
+        backdrop-filter: blur(5px)
+    }
+
+    .transfer-card {
+        background: linear-gradient(165deg, #1c1018, #120a10);
+        border: 1.5px solid rgba(255, 215, 0, .4);
+        border-radius: 16px;
+        padding: 20px;
+        width: 100%;
+        max-width: 360px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px
+    }
+
+    .transfer-card h3 {
+        color: #ffd700;
+        text-align: center;
+        margin: 0 0 4px;
+        font-size: 1.05rem
+    }
+
+    .transfer-hint {
+        font-size: .72rem;
+        color: #999;
+        text-align: center;
+        line-height: 1.4
+    }
+
+    .msg-badge {
+        display: none;
+        min-width: 18px;
+        height: 18px;
+        padding: 0 5px;
+        border-radius: 9px;
+        background: #ef4444;
+        color: #fff;
+        font-size: .68rem;
+        font-weight: 800;
+        align-items: center;
+        justify-content: center;
+        margin-left: 6px
+    }
+
+    .msg-badge.show {
+        display: inline-flex
+    }
+
+    .msg-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, .88);
+        z-index: 1060;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 12px;
+        backdrop-filter: blur(5px)
+    }
+
+    .msg-panel {
+        width: 100%;
+        max-width: 420px;
+        height: min(78vh, 620px);
+        background: linear-gradient(165deg, #1a1016, #0e0a0c);
+        border: 1.5px solid rgba(255, 215, 0, .35);
+        border-radius: 16px;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        box-shadow: 0 20px 50px rgba(0, 0, 0, .55)
+    }
+
+    .msg-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 14px;
+        border-bottom: 1px solid rgba(255, 255, 255, .08);
+        background: rgba(0, 0, 0, .25)
+    }
+
+    .msg-header h3 {
+        margin: 0;
+        color: #ffd700;
+        font-size: .95rem
+    }
+
+    .msg-body {
+        flex: 1;
+        display: flex;
+        min-height: 0
+    }
+
+    .msg-peers {
+        width: 38%;
+        border-right: 1px solid rgba(255, 255, 255, .08);
+        overflow-y: auto;
+        background: rgba(0, 0, 0, .2)
+    }
+
+    .msg-peer {
+        padding: 10px 8px;
+        cursor: pointer;
+        border-bottom: 1px solid rgba(255, 255, 255, .05);
+        font-size: .78rem
+    }
+
+    .msg-peer:hover, .msg-peer.active {
+        background: rgba(255, 215, 0, .08)
+    }
+
+    .msg-peer-name {
+        font-weight: 700;
+        color: #eee;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 4px
+    }
+
+    .msg-peer-sub {
+        color: #777;
+        font-size: .68rem;
+        margin-top: 2px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap
+    }
+
+    .msg-chat {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        min-width: 0
+    }
+
+    .msg-thread {
+        flex: 1;
+        overflow-y: auto;
+        padding: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px
+    }
+
+    .msg-bubble {
+        max-width: 85%;
+        padding: 8px 11px;
+        border-radius: 12px;
+        font-size: .8rem;
+        line-height: 1.45;
+        word-break: break-word
+    }
+
+    .msg-bubble.me {
+        align-self: flex-end;
+        background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+        color: #fff;
+        border-bottom-right-radius: 4px
+    }
+
+    .msg-bubble.them {
+        align-self: flex-start;
+        background: rgba(255, 255, 255, .08);
+        color: #eee;
+        border-bottom-left-radius: 4px
+    }
+
+    .msg-time {
+        font-size: .62rem;
+        opacity: .65;
+        margin-top: 3px
+    }
+
+    .msg-compose {
+        display: flex;
+        gap: 6px;
+        padding: 10px;
+        border-top: 1px solid rgba(255, 255, 255, .08)
+    }
+
+    .msg-compose input {
+        flex: 1;
+        padding: 10px;
+        border-radius: 10px;
+        border: 1px solid rgba(255, 255, 255, .12);
+        background: rgba(0, 0, 0, .35);
+        color: #fff;
+        font-size: .85rem;
+        outline: none
+    }
+
+    .msg-compose button {
+        padding: 10px 14px;
+        border: none;
+        border-radius: 10px;
+        background: linear-gradient(135deg, #eab308, #ca8a04);
+        color: #111;
+        font-weight: 800;
+        cursor: pointer;
+        font-size: .8rem
+    }
+
+    .msg-empty {
+        color: #666;
+        text-align: center;
+        padding: 30px 12px;
+        font-size: .8rem
+    }
+
+    .msg-new-row {
+        display: flex;
+        gap: 6px;
+        padding: 8px;
+        border-bottom: 1px solid rgba(255, 255, 255, .06)
+    }
+
+    .msg-new-row input {
+        flex: 1;
+        padding: 8px;
+        border-radius: 8px;
+        border: 1px solid rgba(255, 255, 255, .12);
+        background: rgba(0, 0, 0, .3);
+        color: #fff;
+        font-size: .78rem
+    }
     </style>
 </head>
 <body>
@@ -1610,6 +1883,59 @@
                 <button class="help-close" onclick="closeHelp(false)">닫기</button>
                 <button class="help-hide" onclick="closeHelp(true)">하루동안 보지 않기</button>
             </div>
+        </div>
+    </div>
+
+    <div class="pin-notice" id="pin-notice">
+        <span id="pin-notice-text"></span>
+        <button type="button" class="pin-notice-close" onclick="closePinNotice()" aria-label="닫기">✕</button>
+    </div>
+
+    <div class="msg-overlay" id="msg-overlay">
+        <div class="msg-panel">
+            <div class="msg-header">
+                <h3>💬 쪽지</h3>
+                <button onclick="closeMessenger()" style="background:none;border:none;color:#aaa;font-size:1.2rem;cursor:pointer">✕</button>
+            </div>
+            <div class="msg-new-row">
+                <input type="text" id="msg-new-to" placeholder="아이디로 새 대화">
+                <button onclick="startNewChat()" style="padding:8px 10px;border:none;border-radius:8px;background:#333;color:#ffd700;font-size:.75rem;font-weight:700;cursor:pointer">시작</button>
+            </div>
+            <div class="msg-body">
+                <div class="msg-peers" id="msg-peers">
+                    <div class="msg-empty">대화 없음</div>
+                </div>
+                <div class="msg-chat">
+                    <div class="msg-thread" id="msg-thread">
+                        <div class="msg-empty">왼쪽에서 대화를 선택하세요</div>
+                    </div>
+                    <div class="msg-compose">
+                        <input type="text" id="msg-input" placeholder="메시지 입력..." maxlength="1000" onkeydown="if(event.key==='Enter')sendMessage()">
+                        <button onclick="sendMessage()">전송</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="transfer-modal-overlay" id="transfer-modal">
+        <div class="transfer-card">
+            <h3>💸 송금하기</h3>
+            <div class="transfer-hint">
+                은행 잔고에서 송금합니다. (게임 보유금 제외)
+                <br>
+                <b style="color:#fbbf24">수수료 5% (최소 ₩100)</b>
+                 → 운영 계좌 귀속
+            </div>
+            <input type="text" id="transfer-to" class="login-input" placeholder="받는 아이디" autocomplete="off">
+            <input type="number" id="transfer-amount" class="login-input" placeholder="송금 금액" min="1" oninput="updateTransferFeePreview()">
+            <div style="font-size:.75rem;color:#fbbf24;text-align:center" id="transfer-fee-preview">수수료: ₩0</div>
+            <input type="password" id="transfer-pw" class="login-input" placeholder="내 비밀번호 확인">
+            <div style="font-size:.78rem;color:#aaa;text-align:center">
+                내 은행 잔고: ₩
+                <span id="transfer-bank-val">0</span>
+            </div>
+            <button class="login-btn" onclick="submitTransfer()">송금하기</button>
+            <button class="login-btn" style="background:#333;color:#ccc" onclick="closeTransferModal()">취소</button>
         </div>
     </div>
     <div class="notice-overlay" id="notice-overlay" style="display:none">
@@ -1702,6 +2028,11 @@
                 </span>
             </div>
             <button class="sidebar-btn rank-open-btn" onclick="openRankingModal()">🏆 랭킹 보기</button>
+            <button class="sidebar-btn" style="background:rgba(59,130,246,.15);border:1px solid #3b82f6;color:#60a5fa;display:flex;align-items:center;justify-content:center" onclick="openMessenger()">
+                💬 쪽지
+                <span class="msg-badge" id="msg-badge">0</span>
+            </button>
+            <button class="sidebar-btn" style="background:rgba(34,197,94,.15);border:1px solid #22c55e;color:#4ade80" onclick="openTransferModal()">💸 송금하기</button>
             <button class="sidebar-btn admin-open-btn" id="admin-menu-btn" style="display:none" onclick="openAdminPanel()">관리자 모드</button>
             <button class="sidebar-btn logout-btn" onclick="handleDeleteAccount()" style="background:rgba(120,40,40,.25);border-color:#a33;color:#fca5a5">회원 탈퇴</button>
             <button class="sidebar-btn logout-btn" onclick="handleLogout()">로그아웃</button>
@@ -2330,7 +2661,7 @@
         MAX_BET_BACC = 50000000;
     const GAME_HELP = {
         baccarat: '【바카라】\n\n• PLAYER / BANKER / TIE 중 하나에 배팅합니다.\n• PLAYER·BANKER 동시 배팅은 불가합니다.\n• PLAYER 1:1 · BANKER 1:0.95(5% 커미션) · TIE 8:1\n• 페어·퍼펙트페어는 추가 사이드 배팅입니다.\n• 카드 합의 일의 자리가 높은 쪽이 승리합니다.\n• 배팅 한도: ₩500 ~ ₩50,000,000 (한 자리당)\n• 마틴게일 남용 방지를 위해 상한이 있습니다.',
-        dragontiger: '【용호】\n\n• DRAGON / TIGER / TIE 중 하나에 배팅합니다.\n• DRAGON·TIGER 동시 배팅은 불가합니다.\n• 카드 숫자(A=1 ~ K=13)가 높은 쪽이 승리합니다.\n• 매 라운드 배수 문양(스페이드/하트/다이아/클로버)과 배수(2·3·5·8배)가 반드시 표시됩니다.\n• 승리 카드 문양 = 배수 문양 → 배수 보너스 지급\n• 승리 카드 문양 ≠ 배수 문양 → 기본 1:1 지급\n• 용/호 배팅 중 타이 시 50% 환급 · TIE 배팅은 8:1(총 9배) 지급\n• 수수료: 1,000원당 40원\n• 배팅 한도: ₩500 ~ ₩5,000,000',
+        dragontiger: '【용호】\n\n• DRAGON(용) / TIGER(호) / TIE 중 하나에 배팅\n• 용·호 동시 배팅 불가\n• 카드 숫자(A=1~K=13)가 높은 쪽 승리\n\n【배당 예시 — 배팅 1,000원 기준】\n• 문양 불일치 승리 → 총 ₩2,000 지급 (1:1)\n• 문양 일치 + 2배 → 총 약 ₩2,150 지급\n• 문양 일치 + 3배 → 총 약 ₩2,300 지급\n• 문양 일치 + 5배 → 총 약 ₩2,600 지급\n• 문양 일치 + 8배 → 총 약 ₩3,050 지급\n  ※ 지급액 = 배팅 × (1.85 + 배수×0.15)\n\n• 용/호 배팅 중 타이 → 배팅액 50% 환급\n• TIE 배팅 적중 → 8:1 (총 9배, 1,000→9,000)\n• 수수료: 1,000원당 40원 (배팅 즉시 차감)\n• 배팅 한도: ₩500 ~ ₩5,000,000',
         highlow: '【하이로우】\n\n• 시작 전 배팅액을 선택합니다.\n• 다음 카드가 높을지(HIGH)·낮을지(LOW)·같을지(SAME)를 맞춥니다.\n• A에서는 HIGH/SAME, K에서는 LOW/SAME만 선택 가능합니다.\n• 2~Q에서 HIGH/LOW 선택 시에도 같은 숫자가 나오면 해당 배당으로 적중합니다.\n• SAME 선택 시 같은 숫자면 배당만큼 지급됩니다.\n• 연속 적중 시 상금 누적, 캐시아웃 가능.',
         roulette: '【룰렛】\n\n• 0~36 단일 제로 룰렛입니다.\n• RED/BLACK, 홀/짝, 1-18은 1:1 배당입니다.\n• ZERO(0)는 35:1(36배 지급)입니다.\n• 0이 나오면 색·홀짝·로우 배팅은 패배합니다.\n• 배팅 한도: ₩500 ~ ₩5,000,000\n• 한 번에 하나의 배팅만 선택합니다.',
         blackjack: '【블랙잭】\n\n• 21에 가까운 쪽이 승리합니다. (A=1또는11, JQK=10)\n• 딜러는 17 이상에서 스탠드합니다.\n• HIT: 카드 추가 · STAND: 결과 확정\n• 승리 1:1 · 푸시 시 원금 반환 · 버스트 시 패배\n• 배팅 한도: ₩500 ~ ₩5,000,000\n• 더블/스플릿은 지원하지 않습니다.',
@@ -2370,6 +2701,8 @@
         } else
             document.getElementById('login-overlay').style.display = 'flex';
         setInterval(checkNotice, 15000);
+        setInterval(refreshMyBalance, 12000);
+        setInterval(pollUnreadBadge, 10000);
         setTimeout(() => {
             if (!localStorage.getItem('seen_reward_notice')) {
                 showLocalNotice('🏆 랭킹 보상 안내\n\n총 수익 랭킹 기준으로 보상이 지급됩니다.\n\n🥇 1등 — ₩20,000\n🥈 2등 — ₩10,000\n🥉 3등 — ₩5,000\n\n※ 지급 시점 및 기준은 운영 정책에 따릅니다.\n건전한 플레이 부탁드립니다.');
@@ -2518,6 +2851,7 @@
         const ab = document.getElementById('admin-menu-btn');
         if (ab)
             ab.style.display = (currentUser === 'abcd051410') ? 'block' : 'none';
+        pollUnreadBadge();
         updateUIValues();
         updateCloseButtonState();
         syncAllCashUI();
@@ -2542,6 +2876,8 @@
                 alert('이름을 입력해주세요.');
                 return;
             }
+            if (!confirm('이름을 정확히 입력했는지 확인하세요.\n\n※ 이름을 잘못 입력하면 계정이 삭제될 수 있습니다.\n\n이름: [' + name + ']\n계속하시겠습니까?'))
+                return;
             try {
                 const res = await fetch('/api/register', {
                     method: 'POST',
@@ -2681,6 +3017,8 @@
     function toggleSidebar(o) {
         document.getElementById('sidebar').classList.toggle('open', o);
         document.getElementById('sidebar-overlay').classList.toggle('open', o);
+        if (o)
+            refreshMyBalance();
     }
     async function openRankingModal() {
         toggleSidebar(false);
@@ -2791,10 +3129,29 @@
             const u = users.find(x => x.username === username);
             if (!u)
                 return;
-            let newCash = (u.cash || 0) + (sign > 0 ? amt : -amt);
-            if (newCash < 0)
-                newCash = 0;
-            await fetch('/api/admin/edit', {
+            let bank = u.cash || 0,
+                game = u.game_cash || 0;
+            if (sign > 0) {
+                bank += amt;
+            } else {
+                let left = amt;
+                if (bank >= left) {
+                    bank -= left;
+                    left = 0;
+                } else {
+                    left -= bank;
+                    bank = 0;
+                }
+                if (left > 0) {
+                    if (game >= left)
+                        game -= left;
+                    else
+                        game = 0;
+                }
+            }
+            bank = Math.max(0, bank);
+            game = Math.max(0, game);
+            const editRes = await fetch('/api/admin/edit', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -2803,15 +3160,19 @@
                     pw: 'abcd051410',
                     admin_user: 'abcd051410',
                     username,
-                    cash: newCash
+                    cash: bank,
+                    game_cash: game
                 })
             });
+            const editData = await editRes.json().catch(() => ({}));
             if (username === currentUser) {
-                serverCash = newCash;
+                serverCash = editData.cash != null ? editData.cash : bank;
+                cash = editData.game_cash != null ? editData.game_cash : game;
                 updateUIValues();
+                syncAllCashUI();
             }
             loadAdminUsers();
-            alert('₩' + amt.toLocaleString() + ' ' + label + ' 완료 (잔액 ₩' + newCash.toLocaleString() + ')');
+            alert('₩' + amt.toLocaleString() + ' ' + label + ' 완료\n은행 ₩' + bank.toLocaleString() + ' · 게임 ₩' + game.toLocaleString());
         } catch (e) {
             alert('실패');
         }
@@ -2857,11 +3218,15 @@
             if (res.ok) {
                 alert('공지 발송 완료');
                 document.getElementById('admin-notice-input').value = '';
-                showLocalNotice(msg);
-            } else
-                showLocalNotice(msg);
+                sessionStorage.removeItem('pin_notice_closed_id');
+                showPinNotice(msg, 'live');
+            } else {
+                sessionStorage.removeItem('pin_notice_closed_id');
+                showPinNotice(msg, 'live');
+            }
         } catch (e) {
-            showLocalNotice(msg);
+            sessionStorage.removeItem('pin_notice_closed_id');
+            showPinNotice(msg, 'live');
         }
     }
 
@@ -3143,23 +3508,23 @@
             const el = createCardElement(h);
             box.appendChild(el);
             els.push(el);
-            await delay(700);
+            await delay(800);
         }
-        await delay(500);
+        await delay(800);
         els[0].classList.add('flipped');
         document.getElementById('score-p').innerText = getScore([pHand[0]]);
-        await delay(750);
+        await delay(800);
         els[1].classList.add('flipped');
         document.getElementById('score-b').innerText = getScore([bHand[0]]);
-        await delay(750);
+        await delay(800);
         els[2].classList.add('flipped');
         let pScore = getScore(pHand);
         document.getElementById('score-p').innerText = pScore;
-        await delay(750);
+        await delay(800);
         els[3].classList.add('flipped');
         let bScore = getScore(bHand);
         document.getElementById('score-b').innerText = bScore;
-        await delay(700);
+        await delay(800);
         if (pScore < 8 && bScore < 8) {
             let p3 = null;
             if (pScore <= 5) {
@@ -3167,7 +3532,7 @@
                 pHand.push(p3);
                 const el = createCardElement(p3);
                 pBox.appendChild(el);
-                await delay(750);
+                await delay(800);
                 el.classList.add('flipped');
                 pScore = getScore(pHand);
                 document.getElementById('score-p').innerText = pScore;
@@ -3178,7 +3543,7 @@
                 bHand.push(b3);
                 const el = createCardElement(b3);
                 bBox.appendChild(el);
-                await delay(750);
+                await delay(800);
                 el.classList.add('flipped');
                 bScore = getScore(bHand);
                 document.getElementById('score-b').innerText = bScore;
@@ -3214,6 +3579,9 @@
         if (isPerf && bets.PERFECT_PAIR > 0)
             pay += bets.PERFECT_PAIR * 26;
         pay = Math.floor(pay);
+        const houseGain = Math.max(0, totalBet - pay);
+        if (houseGain > 0)
+            collectHouse(houseGain);
         cash = Math.floor(cash + pay);
         checkBrokeReset();
         const paidEl = document.getElementById('paid-val');
@@ -3416,8 +3784,10 @@
                 info = document.getElementById('dt-multi-info');
             mt.innerText = suitObj.sym + ' ' + suitObj.name + ' ' + currentDTMulti + '배';
             badge.classList.add('show');
-            if (info)
-                info.innerText = '[' + suitObj.name + '] 일치 시 배수 보너스 적용 · 다른 문양 1:1 · 용/호 타이 50% · TIE 8:1';
+            if (info) {
+                const factor = (1.85 + currentDTMulti * 0.15).toFixed(2);
+                info.innerText = '[' + suitObj.name + '] 일치 시 ×' + factor + ' 지급 · 다른 문양 ×2(1:1) · 용/호 타이 50% · TIE×9';
+            }
             isBettingOpenDT = true;
             setZoneDisabledDT(false);
             let t = 8;
@@ -3458,16 +3828,16 @@
             tC = deck.pop();
         const dEl = createCardElement(dC);
         dBox.appendChild(dEl);
-        await delay(550);
+        await delay(800);
         const tEl = createCardElement(tC);
         tBox.appendChild(tEl);
-        await delay(600);
+        await delay(800);
         dEl.classList.add('flipped');
         document.getElementById('score-d').innerText = rankValueFull(dC);
-        await delay(550);
+        await delay(800);
         tEl.classList.add('flipped');
         document.getElementById('score-tg').innerText = rankValueFull(tC);
-        await delay(650);
+        await delay(800);
         await settleRoundDT(dC, tC);
     }
     async function settleRoundDT(dCard, tCard) {
@@ -3502,6 +3872,9 @@
             pay += multiHit ? multiPayT : (betsDT.TIGER * 2);
         }
         pay = Math.floor(pay);
+        const houseGainDT = Math.max(0, total - pay);
+        if (houseGainDT > 0)
+            collectHouse(houseGainDT);
         cash = Math.floor(cash + pay);
         checkBrokeReset();
         const dtp = document.getElementById('dt-paid-val');
@@ -3559,6 +3932,8 @@
             amt,
             fee
         });
+        if (fee > 0)
+            collectHouse(fee);
         document.getElementById('dt-cash-val').innerText = Math.floor(cash).toLocaleString();
         document.getElementById('dt-bet-val').innerText = Math.floor(Object.values(betsDT).reduce((a, b) => a + b, 0)).toLocaleString();
         const chipId = type === 'TIE' ? 'chip-DT_TIE' : 'chip-' + type,
@@ -3816,6 +4191,7 @@
         } else {
             re.innerText = '실패... 상금 소멸';
             re.style.color = '#ef4444';
+            collectHouse(hlStake);
             hlActive = false;
             hlPot = 0;
             hlStreak = 0;
@@ -4029,6 +4405,9 @@
             pay = amt * 2;
         else if (rlBetType === 'low' && num >= 1 && num <= 18)
             pay = amt * 2;
+        const hg = Math.max(0, amt - pay);
+        if (hg > 0)
+            collectHouse(hg);
         cash += pay;
         checkBrokeReset();
         syncAllCashUI();
@@ -4165,6 +4544,9 @@
             msg = '푸시 (무승부)';
         } else
             msg = result === 'bust' ? '버스트... 패배' : '패배';
+        const bjHouse = Math.max(0, bjBet - pay);
+        if (bjHouse > 0)
+            collectHouse(bjHouse);
         cash += pay;
         checkBrokeReset();
         syncAllCashUI();
@@ -4218,6 +4600,9 @@
             document.getElementById('slot-result').innerText = '꽝...';
             document.getElementById('slot-result').style.color = '#ef4444';
         }
+        const slotHouse = Math.max(0, 3000 - prize);
+        if (slotHouse > 0)
+            collectHouse(slotHouse);
         cash += prize;
         checkBrokeReset();
         syncAllCashUI();
@@ -4289,6 +4674,7 @@
             re.innerText = '합 ' + sum + ' — 적중! +₩' + profit.toLocaleString() + ' (×' + mult + ')';
             re.style.color = '#4ade80';
         } else {
+            collectHouse(amt);
             re.innerText = '합 ' + sum + ' — 실패';
             re.style.color = '#ef4444';
         }
@@ -4326,6 +4712,274 @@
         if (hideDay && g)
             localStorage.setItem('help_hide_' + g + '_until', String(Date.now() + 864e5));
         document.getElementById('help-overlay').style.display = 'none';
+    }
+
+
+    function openTransferModal() {
+        toggleSidebar(false);
+        document.getElementById('transfer-to').value = '';
+        document.getElementById('transfer-amount').value = '';
+        document.getElementById('transfer-pw').value = '';
+        document.getElementById('transfer-bank-val').innerText = Math.floor(serverCash).toLocaleString();
+        document.getElementById('transfer-modal').style.display = 'flex';
+    }
+    function closeTransferModal() {
+        document.getElementById('transfer-modal').style.display = 'none';
+    }
+    async function submitTransfer() {
+        const to = document.getElementById('transfer-to').value.trim();
+        const amount = parseInt(document.getElementById('transfer-amount').value, 10);
+        const password = document.getElementById('transfer-pw').value;
+        if (!to) {
+            alert('받는 아이디를 입력하세요');
+            return;
+        }
+        if (!amount || amount <= 0) {
+            alert('금액을 확인하세요');
+            return;
+        }
+        if (!password) {
+            alert('비밀번호를 입력하세요');
+            return;
+        }
+        if (!currentUser) {
+            alert('로그인이 필요합니다');
+            return;
+        }
+        try {
+            const res = await fetch('/api/transfer', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    from_user: currentUser,
+                    to_user: to,
+                    amount,
+                    password
+                })
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                alert(data.error || '송금 실패');
+                return;
+            }
+            serverCash = data.cash != null ? data.cash : serverCash;
+            if (data.game_cash != null)
+                cash = data.game_cash;
+            updateUIValues();
+            syncAllCashUI();
+            closeTransferModal();
+            alert(data.message || '송금 완료');
+        } catch (e) {
+            alert('서버 오류');
+        }
+    }
+    function hasActiveGameBets() {
+        const tb = Object.values(bets || {}).reduce((a, b) => a + b, 0);
+        const td = Object.values(betsDT || {}).reduce((a, b) => a + b, 0);
+        return tb > 0 || td > 0 || !!hlActive || !!bjActive || !!rlSpinning;
+    }
+    async function refreshMyBalance() {
+        if (!currentUser)
+            return;
+        try {
+            const res = await fetch('/api/admin/users?pw=abcd051410');
+            if (!res.ok)
+                return;
+            const users = await res.json();
+            const u = users.find(x => x.username === currentUser);
+            if (!u)
+                return;
+            serverCash = u.cash || 0;
+            if (!hasActiveGameBets()) {
+                cash = u.game_cash || 0;
+            }
+            totalRolling = u.total_rolling || 0;
+            totalProfit = u.total_profit || 0;
+            updateUIValues();
+            syncAllCashUI();
+        } catch (e) {}
+    }
+
+
+    let msgPeer = null,
+        msgPollTimer = null;
+    async function collectHouse(amount) {
+        amount = Math.floor(amount || 0);
+        if (amount <= 0)
+            return;
+        try {
+            await fetch('/api/house_collect', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    amount
+                })
+            });
+        } catch (e) {}
+    }
+    function updateTransferFeePreview() {
+        const a = parseInt(document.getElementById('transfer-amount').value, 10) || 0;
+        const fee = a > 0 ? Math.max(100, Math.floor(a * 0.05)) : 0;
+        const el = document.getElementById('transfer-fee-preview');
+        if (el)
+            el.innerText = a > 0 ? ('수수료: ₩' + fee.toLocaleString() + ' · 총 출금 ₩' + (a + fee).toLocaleString()) : '수수료: ₩0';
+    }
+    function openMessenger() {
+        toggleSidebar(false);
+        document.getElementById('msg-overlay').style.display = 'flex';
+        loadMsgInbox();
+        if (msgPollTimer)
+            clearInterval(msgPollTimer);
+        msgPollTimer = setInterval(() => {
+            if (document.getElementById('msg-overlay').style.display === 'flex') {
+                loadMsgInbox();
+                if (msgPeer)
+                    loadMsgThread(msgPeer, true);
+            }
+        }, 8000);
+    }
+    function closeMessenger() {
+        document.getElementById('msg-overlay').style.display = 'none';
+        if (msgPollTimer) {
+            clearInterval(msgPollTimer);
+            msgPollTimer = null;
+        }
+        pollUnreadBadge();
+    }
+    async function loadMsgInbox() {
+        if (!currentUser)
+            return;
+        try {
+            const res = await fetch('/api/messages/inbox?user=' + encodeURIComponent(currentUser));
+            if (!res.ok)
+                return;
+            const data = await res.json();
+            const box = document.getElementById('msg-peers');
+            const peers = data.peers || [];
+            updateMsgBadge(data.total_unread || 0);
+            if (!peers.length) {
+                box.innerHTML = '<div class="msg-empty">대화가 없습니다</div>';
+                return;
+            }
+            box.innerHTML = '';
+            peers.forEach(p => {
+                const d = document.createElement('div');
+                d.className = 'msg-peer' + (msgPeer === p.username ? ' active' : '');
+                d.onclick = () => openMsgThread(p.username, p.display_name);
+                const badge = p.unread > 0 ? '<span class="msg-badge show">' + p.unread + '</span>' : '';
+                d.innerHTML = '<div class="msg-peer-name"><span>' + (p.display_name || p.username) + '</span>' + badge + '</div><div class="msg-peer-sub">@' + p.username + '</div>';
+                box.appendChild(d);
+            });
+        } catch (e) {}
+    }
+    function startNewChat() {
+        const to = document.getElementById('msg-new-to').value.trim();
+        if (!to) {
+            alert('아이디를 입력하세요');
+            return;
+        }
+        if (to === currentUser) {
+            alert('본인에게는 보낼 수 없습니다');
+            return;
+        }
+        openMsgThread(to, to);
+        document.getElementById('msg-new-to').value = '';
+    }
+    async function openMsgThread(peer, displayName) {
+        msgPeer = peer;
+        await loadMsgThread(peer, false);
+        loadMsgInbox();
+    }
+    async function loadMsgThread(peer, silent) {
+        if (!currentUser || !peer)
+            return;
+        try {
+            const res = await fetch('/api/messages/thread?user=' + encodeURIComponent(currentUser) + '&peer=' + encodeURIComponent(peer));
+            if (!res.ok)
+                return;
+            const data = await res.json();
+            const thr = document.getElementById('msg-thread');
+            const msgs = data.messages || [];
+            if (!msgs.length) {
+                thr.innerHTML = '<div class="msg-empty">' + peer + '님과 대화를 시작하세요</div>';
+                return;
+            }
+            thr.innerHTML = '';
+            msgs.forEach(m => {
+                const mine = m.from_user === currentUser;
+                const b = document.createElement('div');
+                b.className = 'msg-bubble ' + (mine ? 'me' : 'them');
+                const t = (m.created_at || '').replace('T', ' ').slice(0, 16);
+                b.innerHTML = escapeHtml(m.body) + '<div class="msg-time">' + t + (mine ? '' : '') + '</div>';
+                thr.appendChild(b);
+            });
+            thr.scrollTop = thr.scrollHeight;
+            pollUnreadBadge();
+        } catch (e) {}
+    }
+    function escapeHtml(s) {
+        return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+    async function sendMessage() {
+        if (!currentUser || !msgPeer) {
+            alert('대화 상대를 선택하세요');
+            return;
+        }
+        const input = document.getElementById('msg-input');
+        const body = input.value.trim();
+        if (!body)
+            return;
+        input.value = '';
+        try {
+            const res = await fetch('/api/messages/send', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    from_user: currentUser,
+                    to_user: msgPeer,
+                    body
+                })
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                alert(data.error || '전송 실패');
+                return;
+            }
+            await loadMsgThread(msgPeer, true);
+            loadMsgInbox();
+        } catch (e) {
+            alert('서버 오류');
+        }
+    }
+    function updateMsgBadge(n) {
+        const b = document.getElementById('msg-badge');
+        if (!b)
+            return;
+        if (n > 0) {
+            b.innerText = n > 99 ? '99+' : String(n);
+            b.classList.add('show');
+        }
+        else {
+            b.classList.remove('show');
+            b.innerText = '0';
+        }
+    }
+    async function pollUnreadBadge() {
+        if (!currentUser)
+            return;
+        try {
+            const res = await fetch('/api/messages/unread?user=' + encodeURIComponent(currentUser));
+            if (!res.ok)
+                return;
+            const d = await res.json();
+            updateMsgBadge(d.count || 0);
+        } catch (e) {}
     }
     </script>
 </body>
