@@ -11,6 +11,43 @@ DATABASE_URL = os.environ.get("DATABASE_URL")
 # 영구 저장이 필요하면 notices 테이블로 분리 가능
 CURRENT_NOTICE = {"id": "", "message": "", "created_at": 0}
 
+# 롤링 티어 (누적 total_rolling 기준, 하락 없음)
+TIER_TABLE = [
+    # min_rolling, name, badge, transfer_fee_rate, attend_reward
+    (300_000_000, "마스터", "🔥", 0.01, 300000),
+    (100_000_000, "다이아", "👑", 0.02, 280000),
+    (50_000_000, "플래티넘", "💎", 0.03, 250000),
+    (20_000_000, "골드", "🥇", 0.04, 230000),
+    (5_000_000, "실버", "🥈", 0.045, 210000),
+    (0, "브론즈", "🥉", 0.05, 200000),
+]
+
+
+def get_tier(rolling):
+    rolling = int(rolling or 0)
+    for i, (mn, name, badge, fee, attend) in enumerate(TIER_TABLE):
+        if rolling >= mn:
+            # next tier
+            if i == 0:
+                next_name, next_need = None, 0
+            else:
+                nmin, nname, _, _, _ = TIER_TABLE[i - 1]
+                next_name, next_need = nname, max(0, nmin - rolling)
+            return {
+                "name": name,
+                "badge": badge,
+                "fee_rate": fee,
+                "attend_reward": attend,
+                "min_rolling": mn,
+                "rolling": rolling,
+                "next_name": next_name,
+                "next_need": next_need,
+            }
+    return get_tier(0)
+
+
+
+
 
 def get_db_connection():
     if not DATABASE_URL:
@@ -244,6 +281,7 @@ def login():
             "profit_rate": profit_rate,
             "last_attendance": last_attendance,
             "total_profit": total_profit,
+            "tier": get_tier(total_rolling),
         })
     except Exception as e:
         print(f"Login error: {e}")
@@ -339,6 +377,7 @@ def admin_get_users():
                 "total_profit": r[8],
                 "last_seen": ls,
                 "online": (now - ls) < 90 if ls else False,
+                "tier": get_tier(r[3] if len(r) > 3 else 0),
             })
         return jsonify(users)
     except Exception as e:
@@ -540,13 +579,10 @@ def transfer_money():
         if amount <= 0:
             return jsonify({"error": "1원 이상 송금해주세요."}), 400
 
-        fee = max(100, int(amount * 0.05))
-        total_need = amount + fee
-
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT password, cash FROM users WHERE username = %s",
+            "SELECT password, cash, COALESCE(total_rolling, 0) FROM users WHERE username = %s",
             (from_user,),
         )
         row = cursor.fetchone()
@@ -557,6 +593,9 @@ def transfer_money():
             cursor.close(); conn.close()
             return jsonify({"error": "비밀번호가 일치하지 않습니다."}), 400
         from_cash = row[1] or 0
+        tier = get_tier(row[2] if len(row) > 2 else 0)
+        fee = max(100, int(amount * float(tier["fee_rate"])))
+        total_need = amount + fee
         if from_cash < total_need:
             cursor.close(); conn.close()
             return jsonify({
@@ -873,12 +912,11 @@ def attendance_check():
         # KST 날짜
         kst = timezone(timedelta(hours=9))
         today = datetime.now(kst).strftime("%Y-%m-%d")
-        reward = 200000
 
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT cash, COALESCE(last_attendance, '') FROM users WHERE username = %s",
+            "SELECT cash, COALESCE(last_attendance, ''), COALESCE(total_rolling, 0) FROM users WHERE username = %s",
             (username,),
         )
         row = cursor.fetchone()
@@ -886,10 +924,12 @@ def attendance_check():
             cursor.close(); conn.close()
             return jsonify({"error": "계정을 찾을 수 없습니다."}), 400
 
-        cash, last = int(row[0] or 0), (row[1] or "")
+        cash, last, rolling = int(row[0] or 0), (row[1] or ""), int(row[2] or 0)
+        tier = get_tier(rolling)
+        reward = int(tier["attend_reward"])
         if last == today:
             cursor.close(); conn.close()
-            return jsonify({"error": "오늘은 이미 출석했습니다.", "already": True, "last_attendance": last}), 400
+            return jsonify({"error": "오늘은 이미 출석했습니다.", "already": True, "last_attendance": last, "tier": tier}), 400
 
         new_cash = cash + reward
         cursor.execute(
@@ -904,7 +944,8 @@ def attendance_check():
             "reward": reward,
             "cash": new_cash,
             "last_attendance": today,
-            "message": f"출석 완료! ₩{reward:,} 지급",
+            "tier": tier,
+            "message": f"출석 완료! [{tier['badge']}{tier['name']}] ₩{reward:,} 지급",
         })
     except Exception as e:
         print(f"Attendance error: {e}")
