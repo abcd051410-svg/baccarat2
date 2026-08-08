@@ -859,6 +859,96 @@ def get_transactions():
         return jsonify({"error": str(e)}), 500
 
 
+
+@app.route("/api/attendance", methods=["POST"])
+def attendance_check():
+    """매일 1회 출석 시 은행 잔고 +200000"""
+    try:
+        data = request.json or {}
+        username = (data.get("username") or "").strip()
+        if not username:
+            return jsonify({"error": "로그인이 필요합니다."}), 400
+
+        # KST 날짜
+        kst = timezone(timedelta(hours=9))
+        today = datetime.now(kst).strftime("%Y-%m-%d")
+        reward = 200000
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT cash, COALESCE(last_attendance, '') FROM users WHERE username = %s",
+            (username,),
+        )
+        row = cursor.fetchone()
+        if not row:
+            cursor.close(); conn.close()
+            return jsonify({"error": "계정을 찾을 수 없습니다."}), 400
+
+        cash, last = int(row[0] or 0), (row[1] or "")
+        if last == today:
+            cursor.close(); conn.close()
+            return jsonify({"error": "오늘은 이미 출석했습니다.", "already": True, "last_attendance": last}), 400
+
+        new_cash = cash + reward
+        cursor.execute(
+            "UPDATE users SET cash = %s, last_attendance = %s WHERE username = %s",
+            (new_cash, today, username),
+        )
+        log_transaction(cursor, username, "출석보상", reward, new_cash, f"{today} 출석체크")
+        conn.commit()
+        cursor.close(); conn.close()
+        return jsonify({
+            "success": True,
+            "reward": reward,
+            "cash": new_cash,
+            "last_attendance": today,
+            "message": f"출석 완료! ₩{reward:,} 지급",
+        })
+    except Exception as e:
+        print(f"Attendance error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/admin/bulk_pay", methods=["POST"])
+def admin_bulk_pay():
+    """모든 유저 은행 잔고에 동일 금액 지급"""
+    try:
+        data = request.json or {}
+        if data.get("pw") != "abcd051410" and data.get("admin_user") != "abcd051410":
+            return jsonify({"error": "Unauthorized"}), 401
+        try:
+            amount = int(data.get("amount", 0))
+        except (TypeError, ValueError):
+            return jsonify({"error": "금액을 확인해주세요."}), 400
+        if amount == 0:
+            return jsonify({"error": "0원은 지급할 수 없습니다."}), 400
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT username, cash FROM users")
+        rows = cursor.fetchall()
+        count = 0
+        for username, cash in rows:
+            new_cash = max(0, int(cash or 0) + amount)
+            cursor.execute(
+                "UPDATE users SET cash = %s WHERE username = %s",
+                (new_cash, username),
+            )
+            kind = "전체지급" if amount > 0 else "전체차감"
+            log_transaction(
+                cursor, username, kind, amount, new_cash,
+                f"관리자 전체 {'지급' if amount > 0 else '차감'}",
+            )
+            count += 1
+        conn.commit()
+        cursor.close(); conn.close()
+        return jsonify({"success": True, "count": count, "amount": amount})
+    except Exception as e:
+        print(f"Bulk pay error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/heartbeat", methods=["POST"])
 def heartbeat():
     try:
