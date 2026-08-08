@@ -463,7 +463,8 @@ img,svg,canvas,video{max-width:100%;height:auto}
 <button type="button" id="diff-btn-hard" onclick="adminSetDifficulty('hard')">어려움<br><span style="font-size:.65rem;font-weight:600">RTP 86%</span></button>
 </div>
 <div style="font-size:.72rem;color:#888;margin-bottom:12px">변경 시 모든 유저 배당에 즉시 반영 · 추가 서버 비용 없음</div>
-<button class="login-btn" style="background:linear-gradient(135deg,#b45309,#7c2d12);color:#fff" onclick="adminResetRanking()">⚠️ 랭킹 초기화</button>
+<button class="login-btn" style="background:linear-gradient(135deg,#dc2626,#991b1b);color:#fff" onclick="adminForceReload()">🔄 전체 강제 새로고침</button>
+<button class="login-btn" style="background:linear-gradient(135deg,#b45309,#7c2d12);color:#fff;margin-top:8px" onclick="adminResetRanking()">⚠️ 랭킹 초기화</button>
 <button class="login-btn" style="background:#374151;color:#fff;margin-top:8px" onclick="closeAdminModal()">닫기</button>
 </div>
 </div></div>
@@ -626,7 +627,7 @@ let rlBetType=null,rlSpinning=false,bjBet=0,bjDeck=[],bjPlayer=[],bjDealer=[],bj
 const SLOT_SYMS=['🍒','🍋','⭐','🔔','💎','7️⃣'];
 const RL_REDS=new Set([1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]);
 function chipHTML(){return '<div class="chip-btn c-500 active" onclick="selectChip(500,this)">500</div><div class="chip-btn c-1k" onclick="selectChip(1000,this)">1천</div><div class="chip-btn c-5k" onclick="selectChip(5000,this)">5천</div><div class="chip-btn c-10k" onclick="selectChip(10000,this)">1만</div><div class="chip-btn c-50k" onclick="selectChip(50000,this)">5만</div><div class="chip-btn c-100k" onclick="selectChip(100000,this)">10만</div><div class="chip-btn c-500k" onclick="selectChip(500000,this)">50만</div><div class="chip-btn c-allin" onclick="selectChip(\'ALLIN\',this)">ALL</div>';}
-window.onload=async()=>{['chip-bar-bacc','chip-bar-dt','chip-bar-rl','chip-bar-bj','chip-bar-dice'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML=chipHTML();});showDisclaimerIfNeeded();initBigRoadGrid('big-road-grid');initBigRoadGrid('dt-road-grid');const saved=localStorage.getItem('bacc_server_user');if(saved){document.getElementById('username-input').value=saved;await autoLogin(saved);}else document.getElementById('login-overlay').style.display='flex';setInterval(checkNotice,30000);setInterval(function(){fetchDifficulty();},45000);fetchDifficulty();setInterval(refreshMyBalance,25000);setInterval(pollTransferDeposits,8000);setInterval(pollUnreadBadge,20000);setInterval(sendHeartbeat,45000);sendHeartbeat();setTimeout(()=>{if(!localStorage.getItem('seen_reward_notice')){showLocalNotice('🏆 랭킹 보상 안내\n\n총 수익 랭킹 기준으로 보상이 지급됩니다.\n\n🥇 1등 — ₩20,000\n🥈 2등 — ₩10,000\n🥉 3등 — ₩5,000\n\n※ 지급 시점 및 기준은 운영 정책에 따릅니다.\n건전한 플레이 부탁드립니다.');localStorage.setItem('seen_reward_notice','1');}},800);};
+window.onload=async()=>{['chip-bar-bacc','chip-bar-dt','chip-bar-rl','chip-bar-bj','chip-bar-dice'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML=chipHTML();});showDisclaimerIfNeeded();initBigRoadGrid('big-road-grid');initBigRoadGrid('dt-road-grid');const saved=localStorage.getItem('bacc_server_user');if(saved){document.getElementById('username-input').value=saved;await autoLogin(saved);}else document.getElementById('login-overlay').style.display='flex';setInterval(checkNotice,30000);setInterval(function(){fetchDifficulty();},8000);fetchDifficulty();setInterval(refreshMyBalance,25000);setInterval(pollTransferDeposits,8000);setInterval(pollUnreadBadge,20000);setInterval(sendHeartbeat,45000);sendHeartbeat();setTimeout(()=>{if(!localStorage.getItem('seen_reward_notice')){showLocalNotice('🏆 랭킹 보상 안내\n\n총 수익 랭킹 기준으로 보상이 지급됩니다.\n\n🥇 1등 — ₩20,000\n🥈 2등 — ₩10,000\n🥉 3등 — ₩5,000\n\n※ 지급 시점 및 기준은 운영 정책에 따릅니다.\n건전한 플레이 부탁드립니다.');localStorage.setItem('seen_reward_notice','1');}},800);};
 function showLocalNotice(m){document.getElementById('notice-body-text').innerText=m;document.getElementById('notice-overlay').style.display='flex';}
 function showDisclaimerIfNeeded(){const u=localStorage.getItem('disclaimer_hide_until');if(u&&Date.now()<parseInt(u,10))return;document.getElementById('disclaimer-overlay').style.display='flex';}
 function closeDisclaimer(h){if(h)localStorage.setItem('disclaimer_hide_until',String(Date.now()+3*864e5));document.getElementById('disclaimer-overlay').style.display='none';}
@@ -1316,6 +1317,7 @@ async function fetchDifficulty(force){
     const res=await fetch('/api/difficulty');
     if(!res.ok)return;
     const d=await res.json();
+    checkForceReload(d);
     if(d && d.mode){
       difficulty={
         mode:d.mode,
@@ -1463,6 +1465,35 @@ document.addEventListener('DOMContentLoaded', () => {
   if(b) b.innerText = sfxOn ? '🔊 효과음 ON' : '🔇 효과음 OFF';
 });
 ['click','touchstart'].forEach(ev=>document.addEventListener(ev,()=>{try{getAC();}catch(e){}},{once:true,passive:true}));
+
+
+let lastForceReloadId = Number(localStorage.getItem('force_reload_id') || 0);
+function checkForceReload(d){
+  if(!d) return;
+  const id = Number(d.force_reload_id || 0);
+  if(id > 0 && id !== lastForceReloadId){
+    lastForceReloadId = id;
+    localStorage.setItem('force_reload_id', String(id));
+    const msg = d.force_reload_message || '서버가 갱신되었습니다. 새로고침합니다.';
+    try{ alert(msg); }catch(e){}
+    location.reload();
+  } else if(id > 0 && lastForceReloadId === 0){
+    // 첫 접속: 리로드 없이 id만 저장
+    lastForceReloadId = id;
+    localStorage.setItem('force_reload_id', String(id));
+  }
+}
+async function adminForceReload(){
+  if(!confirm('모든 접속 유저에게 강제 새로고침을 보낼까요?'))return;
+  try{
+    const res=await fetch('/api/admin/force_reload',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pw:'abcd051410',admin_user:'abcd051410'})});
+    const data=await res.json();
+    if(!res.ok){alert(data.error||'실패');return;}
+    lastForceReloadId = Number(data.id||0);
+    localStorage.setItem('force_reload_id', String(lastForceReloadId));
+    alert('전송 완료. 다른 유저가 수 초 내 새로고침됩니다.\\n(본인은 제외됨)');
+  }catch(e){alert('서버 오류');}
+}
 
 </script>
 </body>
