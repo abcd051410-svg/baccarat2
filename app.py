@@ -253,30 +253,30 @@ def _gen_baccarat_round():
     b = [deck.pop(), deck.pop()]
     ps, bs = _score(p), _score(b)
     p3 = None
-    # player third
-    if ps <= 5:
-        p3 = deck.pop()
-        p.append(p3)
-        ps = _score(p)
-    # banker third (standard baccarat)
-    def banker_draws():
-        if p3 is None:
-            return bs <= 5
-        pv = p3["val"]
-        if bs <= 2:
-            return True
-        if bs == 3:
-            return pv != 8
-        if bs == 4:
-            return pv in (2, 3, 4, 5, 6, 7)
-        if bs == 5:
-            return pv in (4, 5, 6, 7)
-        if bs == 6:
-            return pv in (6, 7)
-        return False
-    if banker_draws():
-        b.append(deck.pop())
-        bs = _score(b)
+    # 내추럴이면 추가 카드 없음
+    if ps < 8 and bs < 8:
+        if ps <= 5:
+            p3 = deck.pop()
+            p.append(p3)
+            ps = _score(p)
+        def banker_draws():
+            if p3 is None:
+                return bs <= 5
+            pv = p3["val"]
+            if bs <= 2:
+                return True
+            if bs == 3:
+                return pv != 8
+            if bs == 4:
+                return pv in (2, 3, 4, 5, 6, 7)
+            if bs == 5:
+                return pv in (4, 5, 6, 7)
+            if bs == 6:
+                return pv in (6, 7)
+            return False
+        if banker_draws():
+            b.append(deck.pop())
+            bs = _score(b)
     if ps > bs:
         result = "PLAYER"
     elif bs > ps:
@@ -374,9 +374,10 @@ TABLES = {
     },
 }
 
-BETTING_SEC = 10
-PLAYING_SEC = 9
-RESULT_SEC = 4
+BETTING_SEC = 12
+PLAYING_SEC_BACC = 22
+PLAYING_SEC_DT = 12
+RESULT_SEC = 5
 
 
 def _ensure_table(game):
@@ -395,8 +396,20 @@ def _ensure_table(game):
         guard += 1
         if t["phase"] == "betting":
             t["phase"] = "playing"
-            t["phase_end"] = now + PLAYING_SEC
-            t["payload"] = _gen_baccarat_round() if game == "baccarat" else _gen_dt_round()
+            play_sec = PLAYING_SEC_BACC if game == "baccarat" else PLAYING_SEC_DT
+            t["phase_end"] = now + play_sec
+            # 배팅 중에 미리 만들어 둔 프리뷰가 있으면 카드만 확정
+            if game == "baccarat":
+                t["payload"] = _gen_baccarat_round()
+            else:
+                preview = t.get("payload") or {}
+                full = _gen_dt_round()
+                # 배팅 중 공개한 multi/suit 유지
+                if preview.get("multi"):
+                    full["multi"] = preview["multi"]
+                    full["suit_name"] = preview.get("suit_name") or full["suit_name"]
+                    full["suit_sym"] = preview.get("suit_sym") or full["suit_sym"]
+                t["payload"] = full
         elif t["phase"] == "playing":
             t["phase"] = "result"
             t["phase_end"] = now + RESULT_SEC
@@ -411,7 +424,18 @@ def _ensure_table(game):
             t["round_id"] += 1
             t["phase"] = "betting"
             t["phase_end"] = now + BETTING_SEC
-            t["payload"] = None
+            if game == "dragontiger":
+                prev = _gen_dt_round()
+                t["payload"] = {
+                    "multi": prev["multi"],
+                    "suit_name": prev["suit_name"],
+                    "suit_sym": prev["suit_sym"],
+                    "dragon": None,
+                    "tiger": None,
+                    "result": None,
+                }
+            else:
+                t["payload"] = None
         now = time.time()
     return t
 
