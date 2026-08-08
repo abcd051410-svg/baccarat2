@@ -714,13 +714,29 @@ img,svg,canvas,video{max-width:100%;height:auto}
 <div class="screen" id="screen-stock">
 <div class="header-bar"><div class="header-title" id="stock-header-title">📈 가상 증권</div><div style="display:flex;gap:6px"><button class="back-btn" id="stock-back-btn" onclick="stockGoBack()">⬅</button><button class="menu-btn" onclick="toggleSidebar(true)">메뉴</button></div></div>
 
-<!-- 종목 리스트 -->
-<div id="stock-list-view" style="flex:1;overflow-y:auto;padding:8px 10px 12px;display:flex;flex-direction:column;gap:0">
-<div style="font-size:.72rem;color:#9ca3af;padding:6px 4px 10px">가상 종목 · 봇 매매로 시세 형성 · 실제 시세 아님</div>
+<!-- 종목 리스트 / 내 투자 -->
+<div id="stock-list-view" style="flex:1;overflow-y:auto;padding:0;display:flex;flex-direction:column;min-height:0;background:#0c0810">
+<div style="display:flex;gap:0;border-bottom:1px solid rgba(255,255,255,.08);padding:0 8px;background:#120a14">
+<button type="button" id="stock-tab-market" onclick="stockSwitchTab('market')" style="flex:1;padding:12px;border:none;background:transparent;color:#ffd700;font-weight:800;font-size:.88rem;border-bottom:2px solid #ffd700;cursor:pointer">종목</button>
+<button type="button" id="stock-tab-portfolio" onclick="stockSwitchTab('portfolio')" style="flex:1;padding:12px;border:none;background:transparent;color:#9ca3af;font-weight:700;font-size:.88rem;border-bottom:2px solid transparent;cursor:pointer">내 투자</button>
+</div>
+<div id="stock-event-banner" style="padding:6px 12px;font-size:.72rem;color:#fbbf24;min-height:1.2em"></div>
+
+<div id="stock-market-pane" style="padding:4px 10px 14px">
+<div style="font-size:.7rem;color:#6b7280;padding:4px 2px 8px">가상 종목 · 봇 매매 시세 · 실제 시세 아님</div>
 <div id="stock-list-body"></div>
-<div style="margin-top:12px;padding:10px;border-radius:12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);font-size:.72rem;color:#9ca3af;line-height:1.45">
-내 보유자산 평가 <b id="stock-portfolio-total" style="color:#ffd700">₩0</b>
-<div id="stock-event-banner" style="margin-top:6px;color:#fbbf24;min-height:1.2em"></div>
+</div>
+
+<div id="stock-portfolio-pane" style="display:none;padding:12px 14px 18px;background:#fff;color:#111;flex:1">
+<div style="font-size:.9rem;color:#6b7280;font-weight:600">내 투자</div>
+<div id="sp-total" style="font-size:1.7rem;font-weight:900;letter-spacing:-.02em;margin-top:4px;color:#111">0원</div>
+<div id="sp-pnl" style="font-size:.9rem;margin-top:4px;color:#2563eb">0원 (0%)</div>
+<div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;margin-bottom:6px">
+<span style="font-size:.75rem;color:#9ca3af;background:#f3f4f6;padding:5px 10px;border-radius:999px">평가금 높은 순</span>
+<span style="font-size:.75rem;color:#6b7280">평가금 · 원</span>
+</div>
+<div id="sp-holdings" style="margin-top:4px"></div>
+<div id="sp-empty" style="display:none;padding:28px 8px;text-align:center;color:#9ca3af;font-size:.85rem">보유 종목이 없습니다<br><span style="font-size:.75rem">종목 탭에서 구매해보세요</span></div>
 </div>
 </div>
 
@@ -2738,8 +2754,10 @@ function stockEnsureTimer(){
   stockTimer=setInterval(()=>{
     if(currentGame!=='stock') return;
     stockSimulateTick();
-    if(stockView==='list') stockRenderList();
-    else if(stockSelected) stockRenderDetail();
+    if(stockView==='list'){
+      if(window._stockTab==='portfolio') stockRenderPortfolio();
+      else stockRenderList();
+    } else if(stockSelected) stockRenderDetail();
   }, 1600);
 }
 
@@ -2747,16 +2765,41 @@ function stockEnter(){
   stockInitMarket(false);
   stockView='list';
   stockSelected=null;
+  window._stockTab='market';
   const lv=document.getElementById('stock-list-view');
   const dv=document.getElementById('stock-detail-view');
   if(lv)lv.style.display='flex';
   if(dv)dv.style.display='none';
   const ht=document.getElementById('stock-header-title');
   if(ht)ht.innerText='📈 가상 증권';
+  stockSwitchTab('market');
   stockEnsureTimer();
   stockSimulateTick();
   stockRenderList();
+  stockRenderPortfolio();
   syncAllCashUI();
+}
+function stockSwitchTab(tab){
+  window._stockTab=tab||'market';
+  const m=document.getElementById('stock-market-pane');
+  const p=document.getElementById('stock-portfolio-pane');
+  const tm=document.getElementById('stock-tab-market');
+  const tp=document.getElementById('stock-tab-portfolio');
+  if(m) m.style.display = (tab==='market')?'block':'none';
+  if(p) p.style.display = (tab==='portfolio')?'block':'none';
+  if(tm){
+    tm.style.color = tab==='market'?'#ffd700':'#9ca3af';
+    tm.style.borderBottomColor = tab==='market'?'#ffd700':'transparent';
+  }
+  if(tp){
+    tp.style.color = tab==='portfolio'?'#111':'#9ca3af';
+    tp.style.borderBottomColor = tab==='portfolio'?'#111':'transparent';
+    // portfolio pane is white - tab on dark bar still
+    tp.style.color = tab==='portfolio'?'#ffd700':'#9ca3af';
+    tp.style.borderBottomColor = tab==='portfolio'?'#ffd700':'transparent';
+  }
+  if(tab==='portfolio') stockRenderPortfolio();
+  else stockRenderList();
 }
 
 function stockGoBack(){
@@ -2893,21 +2936,76 @@ function stockRenderList(){
   let html='';
   STOCK_DEFS.forEach(d=>{
     const s=stockMarket.stocks[d.id];
+    if(!s)return;
     const chg=s.price - s.prevClose;
     const pct=s.prevClose? (chg/s.prevClose*100):0;
     const col=chg>0?'#ef4444':(chg<0?'#3b82f6':'#9ca3af');
     const sign=chg>0?'+':'';
-    html+='<div onclick="stockOpenDetail(\''+s.id+'\')" style="display:flex;justify-content:space-between;align-items:center;padding:12px 8px;border-bottom:1px solid rgba(255,255,255,.06);cursor:pointer">';
-    html+='<div><div style="font-weight:800;color:#fff">'+s.name+'</div><div style="font-size:.68rem;color:#9ca3af;margin-top:2px">'+s.id+' · '+s.sector+'</div></div>';
-    html+='<div style="text-align:right"><div style="font-weight:800;color:#fff">₩'+Math.floor(s.price).toLocaleString()+'</div>';
-    html+='<div style="font-size:.72rem;color:'+col+'">'+sign+Math.floor(chg).toLocaleString()+' ('+sign+pct.toFixed(2)+'%)</div></div></div>';
+    const colors=['#dc2626','#1d4ed8','#7c3aed','#059669','#d97706','#0ea5e9'];
+    const bg=colors[STOCK_DEFS.findIndex(x=>x.id===d.id)%colors.length];
+    html+='<div onclick="stockOpenDetail(\''+s.id+'\')" style="display:flex;align-items:center;gap:10px;padding:12px 6px;border-bottom:1px solid rgba(255,255,255,.06);cursor:pointer">';
+    html+='<div style="width:36px;height:36px;border-radius:50%;background:'+bg+';color:#fff;display:flex;align-items:center;justify-content:center;font-size:.62rem;font-weight:800;flex-shrink:0">'+s.id.slice(0,3)+'</div>';
+    html+='<div style="flex:1;min-width:0"><div style="font-weight:800;color:#fff">'+s.name+'</div><div style="font-size:.68rem;color:#9ca3af;margin-top:2px">'+s.id+' · '+s.sector+'</div></div>';
+    html+='<div style="text-align:right"><div style="font-weight:800;color:#fff">'+Math.floor(s.price).toLocaleString()+'원</div>';
+    html+='<div style="font-size:.72rem;color:'+col+'">'+sign+Math.floor(Math.abs(chg)).toLocaleString()+' ('+sign+pct.toFixed(1)+'%)</div></div></div>';
   });
   body.innerHTML=html;
-  const pt=document.getElementById('stock-portfolio-total');
-  if(pt) pt.innerText='₩'+stockPortfolioValue().toLocaleString();
   const sub=document.getElementById('stock-control-sub');
   if(sub) sub.innerText='평가 ₩'+stockPortfolioValue().toLocaleString();
 }
+function stockRenderPortfolio(){
+  stockInitMarket(false);
+  const box=document.getElementById('sp-holdings');
+  const empty=document.getElementById('sp-empty');
+  const totalEl=document.getElementById('sp-total');
+  const pnlEl=document.getElementById('sp-pnl');
+  if(!box)return;
+  const items=[];
+  let total=0, costSum=0;
+  Object.keys(stockMarket.portfolio||{}).forEach(id=>{
+    const h=stockMarket.portfolio[id];
+    const s=stockMarket.stocks[id];
+    if(!h||!s||!(h.qty>0)) return;
+    const val=Math.floor(h.qty*s.price);
+    const cost=Math.floor(h.qty*(h.avg||s.price));
+    total+=val; costSum+=cost;
+    items.push({id, h, s, val, cost, pnl:val-cost});
+  });
+  items.sort((a,b)=>b.val-a.val);
+  if(totalEl) totalEl.innerText=total.toLocaleString()+'원';
+  const pnl=total-costSum;
+  const pct=costSum? (pnl/costSum*100):0;
+  if(pnlEl){
+    const col=pnl>0?'#ef4444':(pnl<0?'#2563eb':'#6b7280');
+    const sign=pnl>0?'+':'';
+    pnlEl.style.color=col;
+    pnlEl.innerText=sign+Math.floor(pnl).toLocaleString()+'원 ('+sign+pct.toFixed(1)+'%)';
+  }
+  if(!items.length){
+    box.innerHTML='';
+    if(empty) empty.style.display='block';
+    return;
+  }
+  if(empty) empty.style.display='none';
+  const colors={RHX:'#dc2626',RBT:'#1d4ed8',RNM:'#7c3aed',RGE:'#059669',RCP:'#d97706',RFD:'#0ea5e9'};
+  let html='';
+  items.forEach(it=>{
+    const col=it.pnl>0?'#ef4444':(it.pnl<0?'#2563eb':'#6b7280');
+    const sign=it.pnl>0?'+':'';
+    const pctH=it.cost? (it.pnl/it.cost*100):0;
+    const bg=colors[it.id]||'#6b7280';
+    html+='<div onclick="stockOpenDetail(\''+it.id+'\')" style="display:flex;align-items:center;gap:12px;padding:14px 2px;border-bottom:1px solid #f3f4f6;cursor:pointer">';
+    html+='<div style="width:40px;height:40px;border-radius:50%;background:'+bg+';color:#fff;display:flex;align-items:center;justify-content:center;font-size:.65rem;font-weight:800">'+it.id.slice(0,3)+'</div>';
+    html+='<div style="flex:1;min-width:0"><div style="font-weight:800;font-size:1rem;color:#111">'+it.s.name+'</div>';
+    html+='<div style="font-size:.75rem;color:#9ca3af;margin-top:2px">'+Number(it.h.qty).toLocaleString()+'주 · 평단 '+Math.floor(it.h.avg||0).toLocaleString()+'원</div></div>';
+    html+='<div style="text-align:right"><div style="font-weight:800;color:#111">'+it.val.toLocaleString()+'원</div>';
+    html+='<div style="font-size:.78rem;color:'+col+';margin-top:2px">'+sign+Math.floor(Math.abs(it.pnl)).toLocaleString()+' ('+sign+pctH.toFixed(1)+'%)</div></div></div>';
+  });
+  box.innerHTML=html;
+  const sub=document.getElementById('stock-control-sub');
+  if(sub) sub.innerText='내 투자 ₩'+total.toLocaleString();
+}
+
 
 function stockMA(candles, n){
   const out=new Array(candles.length).fill(null);
@@ -3082,7 +3180,11 @@ async function stockDetailSell(){
   let qty=parseInt(inp&&inp.value,10);
   if(!qty||qty<=0){alert('수량을 입력하세요');return;}
   if(qty>(hold.qty||0)){alert('보유 수량 부족');return;}
-  const gain=qty*s.price;
+  const avg=Number(hold.avg)||s.price;
+  const cost=Math.floor(qty*avg);
+  const gain=Math.floor(qty*s.price);
+  const profit=gain-cost;
+  const pct=cost? (profit/cost*100):0;
   hold.qty-=qty;
   if(hold.qty<=0) delete stockMarket.portfolio[s.id];
   else stockMarket.portfolio[s.id]=hold;
@@ -3091,9 +3193,19 @@ async function stockDetailSell(){
   syncAllCashUI();
   stockSave();
   reportMission('play_stock');
+  if(profit>0) reportMission('win_any');
   await updateServerData(0);
   stockRenderDetail();
-  alert(s.name+' '+qty+'주 판매 · ₩'+gain.toLocaleString());
+  stockRenderPortfolio();
+  const sign=profit>0?'+':'';
+  const title=profit>0?'실현 이익':(profit<0?'실현 손실':'본전');
+  alert(
+    s.name+' '+qty+'주 판매\n'+
+    '────────────────\n'+
+    '매도금액  ₩'+gain.toLocaleString()+'\n'+
+    '매수원가  ₩'+cost.toLocaleString()+'\n'+
+    title+'  ₩'+sign+Math.floor(profit).toLocaleString()+' ('+sign+pct.toFixed(2)+'%)'
+  );
 }
 
 // legacy no-ops for safety
