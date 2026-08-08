@@ -1019,6 +1019,38 @@ def admin_bulk_pay():
 
 
 
+
+@app.route("/api/admin/rename", methods=["POST"])
+def admin_rename():
+    try:
+        data = request.json or {}
+        if data.get("pw") != "abcd051410" and data.get("admin_user") != "abcd051410":
+            return jsonify({"error": "Unauthorized"}), 401
+        username = (data.get("username") or "").strip()
+        new_name = (data.get("display_name") or data.get("name") or "").strip()
+        if not username:
+            return jsonify({"error": "username required"}), 400
+        if not new_name:
+            return jsonify({"error": "이름을 입력해주세요."}), 400
+        if len(new_name) > 20:
+            return jsonify({"error": "이름은 20자 이내"}), 400
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE users SET display_name = %s WHERE username = %s",
+            (new_name, username),
+        )
+        if cursor.rowcount == 0:
+            cursor.close(); conn.close()
+            return jsonify({"error": "유저 없음"}), 400
+        conn.commit()
+        cursor.close(); conn.close()
+        return jsonify({"success": True, "username": username, "display_name": new_name})
+    except Exception as e:
+        print(f"Admin rename error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/admin/suspend", methods=["POST"])
 def admin_suspend():
     """계정 일시정지 / 해제"""
