@@ -97,6 +97,18 @@ def require_admin():
 
 
 
+
+TIER_TABLE = [
+    # min_rolling, name, badge, fee_rate, attend, max_bet_mult, roll_ratio
+    (300_000_000, "마스터", "🔥", 0.01, 300000, 5.0, 0.50),
+    (100_000_000, "다이아", "👑", 0.02, 280000, 3.0, 0.60),
+    (50_000_000, "플래티넘", "💎", 0.03, 250000, 2.0, 0.70),
+    (20_000_000, "골드", "🥇", 0.04, 230000, 1.5, 0.80),
+    (5_000_000, "실버", "🥈", 0.045, 210000, 1.2, 0.90),
+    (0, "브론즈", "🥉", 0.05, 200000, 1.0, 1.00),
+]
+
+
 def get_tier(rolling):
     rolling = int(rolling or 0)
     for i, row in enumerate(TIER_TABLE):
