@@ -2120,6 +2120,58 @@
         font-size: .95rem;
         cursor: pointer
     }
+
+    *, *::before, *::after {
+        box-sizing: border-box
+    }
+
+    html, body {
+        width: 100%;
+        height: 100%;
+        max-width: 100vw;
+        overflow-x: hidden
+    }
+
+    body {
+        overflow-y: hidden;
+        -webkit-overflow-scrolling: touch
+    }
+
+    .screen.active {
+        width: 100%;
+        max-width: 100vw;
+        height: 100%;
+        height: 100dvh;
+        max-height: 100dvh;
+        overflow-x: hidden;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain
+    }
+
+    .screen {
+        overflow-x: hidden
+    }
+
+    .header-bar, .control-bar {
+        flex-shrink: 0;
+        max-width: 100%
+    }
+
+    .lobby-list, .bet-grid, .hands-container {
+        max-width: 100%;
+        overflow-x: hidden
+    }
+
+    img, svg, canvas, video {
+        max-width: 100%;
+        height: auto
+    }
+
+    .msg-overlay, .tx-overlay, .transfer-modal-overlay, .deposit-alarm-overlay, .notice-overlay, .disclaimer-overlay {
+        max-width: 100vw;
+        overflow: hidden
+    }
     </style>
 </head>
 <body>
@@ -2278,6 +2330,12 @@
             <div class="admin-section-title">📢 공지 발송</div>
             <textarea id="admin-notice-input" class="admin-notice-input" placeholder="전체 유저 공지 내용"></textarea>
             <button class="login-btn" style="background:linear-gradient(135deg,#3b82f6,#1d4ed8);color:#fff" onclick="sendAdminNotice()">공지 발송</button>
+            <div class="admin-section-title">💸 전체 유저 일괄 지급</div>
+            <div style="display:flex;gap:8px;align-items:center">
+                <input type="number" id="admin-bulk-amount" class="login-input" placeholder="금액 (음수=전체 차감)" style="margin:0;flex:1">
+                <button class="login-btn" style="background:linear-gradient(135deg,#22c55e,#15803d);color:#fff;width:auto;padding:12px 14px;white-space:nowrap" onclick="adminBulkPay()">전체 지급</button>
+            </div>
+            <div style="font-size:.72rem;color:#888;margin-top:-4px">모든 유저 은행 잔고에 동일 금액 반영 · 입출금 기록됨</div>
             <div class="admin-section-title">👥 유저 목록 · 잔액</div>
             <div style="font-size:.72rem;color:#777;margin-bottom:4px">아이디 / 이름 / 잔액 · 금액 추가만 가능</div>
             <div class="admin-user-list" id="admin-user-list-container"></div>
@@ -2321,6 +2379,7 @@
             </button>
             <button class="sidebar-btn" style="background:rgba(34,197,94,.15);border:1px solid #22c55e;color:#4ade80" onclick="openTransferModal()">💸 송금하기</button>
             <button class="sidebar-btn" style="background:rgba(168,85,247,.12);border:1px solid #a855f7;color:#c084fc" onclick="openTxHistory()">📋 입출금 기록</button>
+            <button class="sidebar-btn" id="attendance-btn" style="background:rgba(251,191,36,.12);border:1px solid #fbbf24;color:#fcd34d" onclick="doAttendance()">📅 출석체크 (₩200,000)</button>
             <button class="sidebar-btn admin-open-btn" id="admin-menu-btn" style="display:none" onclick="openAdminPanel()">관리자 모드</button>
             <button class="sidebar-btn logout-btn" onclick="handleDeleteAccount()" style="background:rgba(120,40,40,.25);border-color:#a33;color:#fca5a5">회원 탈퇴</button>
             <button class="sidebar-btn logout-btn" onclick="handleLogout()">로그아웃</button>
@@ -3156,6 +3215,7 @@
         displayName = d.display_name || d.name || d.username;
         serverCash = d.cash || 0;
         cash = d.game_cash || 0;
+        lastAttendanceDate = d.last_attendance || '';
         totalRolling = d.total_rolling || 0;
         initialWithdraw = d.initial_withdraw || 0;
         currentRolling = d.current_rolling || 0;
@@ -3167,6 +3227,7 @@
             ab.style.display = (currentUser === 'abcd051410') ? 'block' : 'none';
         lastKnownBank = serverCash;
         lastKnownGame = cash;
+        updateAttendanceBtn();
         pollUnreadBadge();
         sendHeartbeat();
         updateUIValues();
@@ -5466,6 +5527,104 @@
             passive: false
         });
     })();
+
+
+    let lastAttendanceDate = '';
+    async function doAttendance() {
+        if (!currentUser) {
+            alert('로그인이 필요합니다');
+            return;
+        }
+        const btn = document.getElementById('attendance-btn');
+        if (btn)
+            btn.disabled = true;
+        try {
+            const res = await fetch('/api/attendance', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    username: currentUser
+                })
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                alert(data.error || '출석 실패');
+                if (data.already) {
+                    lastAttendanceDate = data.last_attendance || lastAttendanceDate;
+                    updateAttendanceBtn();
+                }
+                return;
+            }
+            serverCash = data.cash != null ? data.cash : serverCash;
+            lastAttendanceDate = data.last_attendance || '';
+            lastKnownBank = serverCash;
+            showDepositAlarm(data.reward || 200000, '출석 보상 지급');
+            updateUIValues();
+            syncAllCashUI();
+            updateAttendanceBtn();
+            alert(data.message || '출석 완료!');
+        } catch (e) {
+            alert('서버 오류');
+        }
+        finally {
+            if (btn)
+                btn.disabled = false;
+        }
+    }
+    function updateAttendanceBtn() {
+        const btn = document.getElementById('attendance-btn');
+        if (!btn)
+            return;
+        const kst = new Date(Date.now() + 9 * 3600 * 1000);
+        const today = kst.toISOString().slice(0, 10);
+        if (lastAttendanceDate === today) {
+            btn.innerText = '📅 오늘 출석 완료';
+            btn.style.opacity = '0.55';
+            btn.disabled = true;
+        } else {
+            btn.innerText = '📅 출석체크 (₩200,000)';
+            btn.style.opacity = '1';
+            btn.disabled = false;
+        }
+    }
+    async function adminBulkPay() {
+        const v = document.getElementById('admin-bulk-amount').value;
+        const amount = parseInt(v, 10);
+        if (isNaN(amount) || amount === 0) {
+            alert('금액을 입력하세요 (음수 가능)');
+            return;
+        }
+        const label = amount > 0 ? ('전체 유저에게 ₩' + amount.toLocaleString() + ' 지급') : ('전체 유저에서 ₩' + Math.abs(amount).toLocaleString() + ' 차감');
+        if (!confirm(label + '\n진행할까요?'))
+            return;
+        try {
+            const res = await fetch('/api/admin/bulk_pay', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    pw: 'abcd051410',
+                    admin_user: 'abcd051410',
+                    amount
+                })
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                alert(data.error || '실패');
+                return;
+            }
+            alert((data.count || 0) + '명에게 반영 완료');
+            document.getElementById('admin-bulk-amount').value = '';
+            loadAdminUsers();
+            if (currentUser)
+                refreshMyBalance();
+        } catch (e) {
+            alert('서버 오류');
+        }
+    }
     </script>
 </body>
 </html>
