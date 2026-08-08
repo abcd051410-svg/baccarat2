@@ -933,7 +933,10 @@ def transfer_money():
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT password, cash, COALESCE(total_rolling, 0) FROM users WHERE username = %s",
+            """
+            SELECT password, COALESCE(cash, 0), COALESCE(game_cash, 0), COALESCE(total_rolling, 0)
+            FROM users WHERE username = %s
+            """,
             (from_user,),
         )
         row = cursor.fetchone()
@@ -943,23 +946,38 @@ def transfer_money():
         if row[0] != password:
             cursor.close(); conn.close()
             return jsonify({"error": "비밀번호가 일치하지 않습니다."}), 400
-        from_cash = row[1] or 0
-        tier = get_tier(row[2] if len(row) > 2 else 0)
+        from_bank = int(row[1] or 0)
+        from_game = int(row[2] or 0)
+        tier = get_tier(row[3] if len(row) > 3 else 0)
         fee = max(100, int(amount * float(tier["fee_rate"])))
         total_need = amount + fee
-        if from_cash < total_need:
+        total_avail = from_bank + from_game
+        if total_avail < total_need:
             cursor.close(); conn.close()
             return jsonify({
-                "error": f"잔고 부족 (송금 ₩{amount:,} + 수수료 ₩{fee:,} = ₩{total_need:,} 필요)"
+                "error": (
+                    f"잔고 부족 (필요 ₩{total_need:,} = 송금 ₩{amount:,} + 수수료 ₩{fee:,} / "
+                    f"은행 ₩{from_bank:,} + 보유 ₩{from_game:,})"
+                )
             }), 400
 
+        # 아이디 우선, 없으면 이름으로 (공백 무시)
         cursor.execute("SELECT username FROM users WHERE username = %s", (to_user,))
         row_to = cursor.fetchone()
         if row_to:
             to_user = row_to[0]
         else:
-            cursor.execute("SELECT username FROM users WHERE display_name = %s", (to_user,))
+            cursor.execute(
+                "SELECT username FROM users WHERE TRIM(COALESCE(display_name, '')) = %s",
+                (to_user,),
+            )
             matches = cursor.fetchall()
+            if not matches:
+                cursor.execute(
+                    "SELECT username FROM users WHERE COALESCE(display_name, '') ILIKE %s",
+                    (to_user,),
+                )
+                matches = cursor.fetchall()
             if len(matches) == 1:
                 to_user = matches[0][0]
             elif len(matches) > 1:
@@ -969,9 +987,12 @@ def transfer_money():
                 cursor.close(); conn.close()
                 return jsonify({"error": "받는 사람(아이디/이름)을 찾을 수 없습니다."}), 400
 
+        # 은행 잔고 우선 차감, 부족분은 게임 보유금에서
+        take_bank = min(from_bank, total_need)
+        take_game = total_need - take_bank
         cursor.execute(
-            "UPDATE users SET cash = cash - %s WHERE username = %s",
-            (total_need, from_user),
+            "UPDATE users SET cash = cash - %s, game_cash = game_cash - %s WHERE username = %s",
+            (take_bank, take_game, from_user),
         )
         cursor.execute(
             "UPDATE users SET cash = cash + %s WHERE username = %s",
@@ -1007,7 +1028,9 @@ def transfer_money():
             "game_cash": me[1] if me else 0,
             "fee": fee,
             "sent": amount,
-            "message": f"{to_user}님에게 ₩{amount:,} 송금 (수수료 ₩{fee:,})",
+            "message": f"{to_user}님에게 ₩{amount:,} 송금 완료 (수수료 ₩{fee:,})",
+            "take_bank": take_bank,
+            "take_game": take_game,
         })
     except Exception as e:
         print(f"Transfer error: {e}")
