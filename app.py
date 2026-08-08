@@ -92,59 +92,9 @@ def require_user():
 
 
 def require_admin():
-    """관리자: 토큰 사용자 또는 body/query 의 admin 표시"""
-    u, err = require_user()
-    data = request.get_json(silent=True) or {}
-    if not data and request.data:
-        try:
-            import json as _json
-            data = _json.loads(request.data.decode("utf-8") or "{}")
-        except Exception:
-            data = {}
-    pw = data.get("pw") or request.args.get("pw") or ""
-    admin_user = data.get("admin_user") or ""
-    if u == ADMIN_USER:
-        return u, None
-    if admin_user == ADMIN_USER or pw == ADMIN_USER or pw == "abcd051410":
-        return ADMIN_USER, None
-    if err:
-        return None, err
-    return None, (jsonify({"error": "Unauthorized"}), 401)
+    """친구 서버: 관리자 API 열어둠 (프론트에서 버튼만 제한)"""
+    return ADMIN_USER, None
 
-# 공지 (메모리 저장 — 서버 재시작 시 초기화)
-# 영구 저장이 필요하면 notices 테이블로 분리 가능
-CURRENT_NOTICE = {"id": "", "message": "", "created_at": 0}
-FORCE_RELOAD = {"id": 0, "message": ""}
-
-
-# 전역 난이도 (서버 메모리 — 재시작 시 normal)
-# easy 106% / normal 96% / hard 86%  (기준 normal=1.0)
-DIFFICULTY_CONFIG = {
-    "mode": "normal",
-    "label": "보통",
-    "rtp": 0.96,
-    "mult": 1.0,  # 배당에 곱하는 계수 (normal 대비)
-}
-DIFFICULTY_PRESETS = {
-    "easy": {"mode": "easy", "label": "쉬움", "rtp": 1.06, "mult": 1.06 / 0.96},
-    "normal": {"mode": "normal", "label": "보통", "rtp": 0.96, "mult": 1.0},
-    "hard": {"mode": "hard", "label": "어려움", "rtp": 0.86, "mult": 0.86 / 0.96},
-}
-
-
-
-
-# 롤링 티어 (누적 total_rolling 기준, 하락 없음)
-TIER_TABLE = [
-    # min_rolling, name, badge, fee_rate, attend, max_bet_mult, roll_ratio
-    # roll_ratio: 마감에 필요한 롤링 = 출금액 * ratio (낮을수록 유리)
-    (300_000_000, "마스터", "🔥", 0.01, 300000, 5.0, 0.50),
-    (100_000_000, "다이아", "👑", 0.02, 280000, 3.0, 0.60),
-    (50_000_000, "플래티넘", "💎", 0.03, 250000, 2.0, 0.70),
-    (20_000_000, "골드", "🥇", 0.04, 230000, 1.5, 0.80),
-    (5_000_000, "실버", "🥈", 0.045, 210000, 1.2, 0.90),
-    (0, "브론즈", "🥉", 0.05, 200000, 1.0, 1.00),
-]
 
 
 def get_tier(rolling):
@@ -598,6 +548,96 @@ def table_state():
         "history_len": len(t.get("history") or []),
     })
 
+
+
+
+@app.route("/api/user_balance", methods=["GET"])
+@app.route("/api/balance", methods=["GET"])
+def get_balance():
+    try:
+        username = (request.args.get("user") or request.args.get("username") or "").strip()
+        if not username:
+            return jsonify({"error": "user required"}), 400
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT COALESCE(cash,0), COALESCE(game_cash,0), COALESCE(total_rolling,0),
+                   COALESCE(initial_withdraw,0), COALESCE(current_rolling,0),
+                   COALESCE(display_name,''), COALESCE(total_profit,0),
+                   COALESCE(last_attendance,''), COALESCE(suspended, FALSE)
+            FROM users WHERE username=%s
+            """,
+            (username,),
+        )
+        row = cursor.fetchone()
+        cursor.close(); release_db(conn)
+        if not row:
+            return jsonify({"error": "없음"}), 404
+        return jsonify({
+            "username": username,
+            "cash": int(row[0] or 0),
+            "game_cash": int(row[1] or 0),
+            "total_rolling": int(row[2] or 0),
+            "initial_withdraw": int(row[3] or 0),
+            "current_rolling": int(row[4] or 0),
+            "display_name": row[5] or "",
+            "name": row[5] or username,
+            "total_profit": int(row[6] or 0),
+            "last_attendance": row[7] or "",
+            "suspended": bool(row[8]),
+            "tier": get_tier(row[2] or 0),
+            "is_admin": username == ADMIN_USER,
+        })
+    except Exception as e:
+        print(f"balance error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/ranking", methods=["GET"])
+def get_ranking():
+    """랭킹용 유저 목록 (로그인 불필요)"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                """
+                SELECT username, COALESCE(cash,0), COALESCE(game_cash,0), COALESCE(total_rolling,0),
+                       COALESCE(display_name,''), COALESCE(total_profit,0), COALESCE(last_seen,0)
+                FROM users
+                """
+            )
+        except Exception:
+            cursor.execute(
+                """
+                SELECT username, COALESCE(cash,0), COALESCE(game_cash,0), COALESCE(total_rolling,0),
+                       COALESCE(display_name,''), COALESCE(total_profit,0), 0
+                FROM users
+                """
+            )
+        rows = cursor.fetchall()
+        cursor.close(); release_db(conn)
+        now = time.time()
+        users = []
+        for r in rows:
+            ls = float(r[6] or 0)
+            users.append({
+                "username": r[0],
+                "cash": int(r[1] or 0),
+                "game_cash": int(r[2] or 0),
+                "total_rolling": int(r[3] or 0),
+                "display_name": r[4] or r[0],
+                "name": r[4] or r[0],
+                "total_profit": int(r[5] or 0),
+                "last_seen": ls,
+                "online": (now - ls) < 90 if ls else False,
+                "tier": get_tier(r[3] or 0),
+            })
+        return jsonify(users)
+    except Exception as e:
+        print(f"ranking error: {e}")
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/api/register", methods=["POST"])
