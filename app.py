@@ -16,6 +16,17 @@ ADMIN_USER = "abcd051410"
 AUTH_TOKENS = {}
 TOKEN_TTL = 60 * 60 * 24 * 7  # 7 days
 
+# ===== 공유 상태 (메모리) =====
+CURRENT_NOTICE = {"id": "", "message": "", "created_at": 0}
+FORCE_RELOAD = {"id": 0, "message": ""}
+
+DIFFICULTY_PRESETS = {
+    "easy": {"mode": "easy", "label": "쉬움", "rtp": 0.98, "mult": 1.05},
+    "normal": {"mode": "normal", "label": "보통", "rtp": 0.96, "mult": 1.0},
+    "hard": {"mode": "hard", "label": "어려움", "rtp": 0.92, "mult": 0.92},
+}
+DIFFICULTY_CONFIG = dict(DIFFICULTY_PRESETS["normal"])
+
 
 def hash_password(password: str) -> str:
     salt = secrets.token_hex(16)
@@ -90,10 +101,27 @@ def require_user():
 
 
 def require_admin():
-    """친구 서버: 관리자 API 열어둠 (프론트에서 버튼만 제한)"""
-    return ADMIN_USER, None
+    """관리자 인증 강화: 토큰(관리자) 또는 pw 확인"""
+    u = get_auth_username()
+    if u == ADMIN_USER:
+        return ADMIN_USER, None
 
+    pw = None
+    if request.method in ("POST", "PUT", "PATCH"):
+        data = request.get_json(silent=True) or {}
+        if not data and request.data:
+            try:
+                import json as _json
+                data = _json.loads(request.data.decode("utf-8") or "{}")
+            except Exception:
+                data = {}
+        pw = (data.get("pw") or data.get("admin_user") or data.get("password") or "").strip()
+    else:
+        pw = (request.args.get("pw") or request.args.get("admin_user") or "").strip()
 
+    if pw in ("abcd051410", ADMIN_USER):
+        return ADMIN_USER, None
+    return None, (jsonify({"error": "Unauthorized - 관리자만 접근 가능"}), 403)
 
 
 TIER_TABLE = [
@@ -130,10 +158,6 @@ def get_tier(rolling):
                 "next_need": next_need,
             }
     return get_tier(0)
-
-
-
-
 
 
 def ensure_user_columns(cursor, conn=None):
@@ -180,7 +204,6 @@ def release_db(conn):
         pass
 
 
-
 def log_transaction(cursor, username, kind, amount, balance_after=0, memo=""):
     """입출금 기록. amount 양수=입금, 음수=출금."""
     try:
@@ -211,8 +234,8 @@ def resolve_username(identifier, conn=None):
             cursor.close(); release_db(conn)
         return row[0], None
     cursor.execute(
-        "SELECT username FROM users WHERE display_name = %s OR display_name = %s",
-        (identifier, identifier),
+        "SELECT username FROM users WHERE TRIM(COALESCE(display_name,'')) = %s",
+        (identifier,),
     )
     rows = cursor.fetchall()
     if own_conn:
@@ -222,8 +245,6 @@ def resolve_username(identifier, conn=None):
     if len(rows) > 1:
         return None, "ambiguous"
     return None, "not_found"
-
-
 
 
 def init_db():
@@ -292,17 +313,16 @@ def init_db():
         """)
         try:
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_msg_to ON messages(to_user, is_read)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_msg_from ON messages(from_user)")
         except Exception:
             pass
 
         conn.commit()
         cursor.close()
         release_db(conn)
-        ensure_user_columns(cursor, conn)
         print("Database initialized successfully!")
     except Exception as e:
         print(f"Database initialization error details: {e}")
-
 
 
 # ===== 공유 테이블 (폴링용, 메모리) =====
@@ -538,8 +558,6 @@ def table_state():
     })
 
 
-
-
 @app.route("/api/user_balance", methods=["GET"])
 @app.route("/api/balance", methods=["GET"])
 def get_balance():
@@ -549,6 +567,15 @@ def get_balance():
             return jsonify({"error": "user required"}), 400
         conn = get_db_connection()
         cursor = conn.cursor()
+        # last_seen 갱신
+        try:
+            cursor.execute(
+                "UPDATE users SET last_seen = %s WHERE username = %s",
+                (time.time(), username),
+            )
+            conn.commit()
+        except Exception:
+            pass
         cursor.execute(
             """
             SELECT COALESCE(cash,0), COALESCE(game_cash,0), COALESCE(total_rolling,0),
@@ -645,6 +672,10 @@ def register():
             return jsonify({"error": "아이디와 비밀번호를 모두 입력해주세요."}), 400
         if not display_name:
             return jsonify({"error": "이름을 입력해주세요."}), 400
+        if len(username) < 3 or len(username) > 20:
+            return jsonify({"error": "아이디는 3~20자로 입력해주세요."}), 400
+        if len(display_name) > 20:
+            return jsonify({"error": "이름은 20자 이내로 입력해주세요."}), 400
 
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -659,11 +690,11 @@ def register():
             INSERT INTO users (
                 username, password, cash, game_cash, total_rolling,
                 initial_withdraw, current_rolling, profit_rate, last_attendance,
-                display_name, total_profit
+                display_name, total_profit, last_seen
             )
-            VALUES (%s, %s, 200000, 0, 0, 0, 0, 0.0, '', %s, 0)
+            VALUES (%s, %s, 200000, 0, 0, 0, 0, 0.0, '', %s, 0, %s)
             """,
-            (username, hash_password(password), display_name),
+            (username, hash_password(password), display_name, time.time()),
         )
         conn.commit()
         cursor.close()
@@ -751,6 +782,16 @@ def login():
                 conn.commit()
             except Exception as e:
                 print(f"pw migrate: {e}")
+
+        # last_seen 갱신
+        try:
+            cursor.execute(
+                "UPDATE users SET last_seen = %s WHERE username = %s",
+                (time.time(), username),
+            )
+            conn.commit()
+        except Exception:
+            pass
 
         cursor.close()
         release_db(conn)
@@ -864,7 +905,8 @@ def update_user():
                 profit_rate = COALESCE(%s, profit_rate),
                 last_attendance = COALESCE(%s, last_attendance),
                 total_profit = COALESCE(%s, total_profit),
-                display_name = COALESCE(NULLIF(%s, ''), display_name)
+                display_name = COALESCE(NULLIF(%s, ''), display_name),
+                last_seen = %s
             WHERE username = %s
             """,
             (
@@ -877,6 +919,7 @@ def update_user():
                 last_attendance,
                 total_profit,
                 display_name,
+                time.time(),
                 username,
             ),
         )
@@ -961,8 +1004,8 @@ def api_withdraw():
         bank2, game2 = bank - amount, game + amount
         init2 = init_w + amount
         cursor.execute(
-            "UPDATE users SET cash=%s, game_cash=%s, initial_withdraw=%s WHERE username=%s",
-            (bank2, game2, init2, auth_user),
+            "UPDATE users SET cash=%s, game_cash=%s, initial_withdraw=%s, last_seen=%s WHERE username=%s",
+            (bank2, game2, init2, time.time(), auth_user),
         )
         log_transaction(cursor, auth_user, "출금", -amount, bank2, "은행→보유")
         conn.commit()
@@ -1020,10 +1063,10 @@ def api_close_session():
         tot_profit2 = tot_profit + session_profit
         cursor.execute(
             """
-            UPDATE users SET cash=%s, game_cash=0, initial_withdraw=0, current_rolling=0, total_profit=%s
+            UPDATE users SET cash=%s, game_cash=0, initial_withdraw=0, current_rolling=0, total_profit=%s, last_seen=%s
             WHERE username=%s
             """,
-            (bank2, tot_profit2, auth_user),
+            (bank2, tot_profit2, time.time(), auth_user),
         )
         log_transaction(cursor, auth_user, "마감", game, bank2, f"세션수익 {session_profit}")
         conn.commit()
@@ -1048,7 +1091,6 @@ def admin_get_users():
         auth_admin, err = require_admin()
         if err:
             return err
-        pw = request.args.get("pw") or request.args.get("admin_user") or ""
 
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -1115,7 +1157,6 @@ def admin_edit_user():
         if err:
             return err
         data = request.json or {}
-        pw = data.get("pw")
         username = data.get("username")
         new_cash = data.get("cash")
         new_game_cash = data.get("game_cash", None)
@@ -1135,14 +1176,14 @@ def admin_edit_user():
         if new_game_cash is not None:
             final_game = max(0, int(new_game_cash))
             cursor.execute(
-                "UPDATE users SET cash = %s, game_cash = %s WHERE username = %s",
-                (final_cash, final_game, username),
+                "UPDATE users SET cash = %s, game_cash = %s, last_seen = %s WHERE username = %s",
+                (final_cash, final_game, time.time(), username),
             )
         else:
             final_game = prev_game
             cursor.execute(
-                "UPDATE users SET cash = %s WHERE username = %s",
-                (final_cash, username),
+                "UPDATE users SET cash = %s, last_seen = %s WHERE username = %s",
+                (final_cash, time.time(), username),
             )
         d_cash = final_cash - prev_cash
         d_game = final_game - prev_game
@@ -1169,7 +1210,6 @@ def admin_edit_user():
         return jsonify({"error": f"서버 통신 오류: {str(e)}"}), 500
 
 
-
 @app.route("/api/admin/delete", methods=["POST"])
 def admin_delete_user():
     try:
@@ -1177,10 +1217,12 @@ def admin_delete_user():
         if err:
             return err
         data = request.json or {}
-        if data.get("pw") != "abcd051410" and data.get("admin_user") != "abcd051410":
-            return jsonify({"error": "Unauthorized"}), 403
-
         username = data.get("username")
+        if not username:
+            return jsonify({"error": "username required"}), 400
+        if username == ADMIN_USER:
+            return jsonify({"error": "관리자 계정은 삭제할 수 없습니다."}), 400
+
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("DELETE FROM users WHERE username = %s", (username,))
@@ -1202,8 +1244,6 @@ def admin_send_notice():
         if err:
             return err
         data = request.json or {}
-        if data.get("pw") != "abcd051410" and data.get("admin_user") != "abcd051410":
-            return jsonify({"error": "Unauthorized"}), 403
 
         message = (data.get("message") or "").strip()
         if not message:
@@ -1235,7 +1275,6 @@ def get_notice():
 @app.route("/")
 def index():
     return render_template("index.html")
-
 
 
 @app.route("/api/delete_account", methods=["POST"])
@@ -1271,10 +1310,6 @@ def admin_reset_ranking():
         auth_admin, err = require_admin()
         if err:
             return err
-        data = request.json or {}
-        admin_user = data.get("admin_user") or data.get("pw") or ""
-        if admin_user != "abcd051410":
-            return jsonify({"error": "Unauthorized"}), 401
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("UPDATE users SET total_profit = 0, total_rolling = 0")
@@ -1284,8 +1319,6 @@ def admin_reset_ranking():
     except Exception as e:
         print(f"Reset ranking error: {e}")
         return jsonify({"error": str(e)}), 500
-
-
 
 
 @app.route("/api/transfer", methods=["POST"])
@@ -1371,12 +1404,12 @@ def transfer_money():
             take_game = total_need - take_bank
 
             cursor.execute(
-                "UPDATE users SET cash = COALESCE(cash,0) - %s, game_cash = COALESCE(game_cash,0) - %s WHERE username = %s",
-                (take_bank, take_game, from_user),
+                "UPDATE users SET cash = COALESCE(cash,0) - %s, game_cash = COALESCE(game_cash,0) - %s, last_seen = %s WHERE username = %s",
+                (take_bank, take_game, time.time(), from_user),
             )
             cursor.execute(
-                "UPDATE users SET cash = COALESCE(cash,0) + %s WHERE username = %s",
-                (amount, to_user),
+                "UPDATE users SET cash = COALESCE(cash,0) + %s, last_seen = %s WHERE username = %s",
+                (amount, time.time(), to_user),
             )
             # 수수료 → 관리자
             cursor.execute("SELECT username FROM users WHERE username = %s", (ADMIN_USER,))
@@ -1487,7 +1520,7 @@ def messages_send():
         if err:
             return err
         data = request.json or {}
-        from_user = (data.get("from_user") or "").strip()
+        from_user = (data.get("from_user") or auth_user or "").strip()
         to_user = (data.get("to_user") or "").strip()
         body = (data.get("body") or "").strip()
         if not from_user or not to_user or not body:
@@ -1503,7 +1536,7 @@ def messages_send():
         if row_to:
             to_user = row_to[0]
         else:
-            cursor.execute("SELECT username FROM users WHERE display_name = %s", (to_user,))
+            cursor.execute("SELECT username FROM users WHERE TRIM(COALESCE(display_name,'')) = %s", (to_user,))
             matches = cursor.fetchall()
             if len(matches) == 1:
                 to_user = matches[0][0]
@@ -1631,8 +1664,6 @@ def messages_thread():
         return jsonify({"error": str(e)}), 500
 
 
-
-
 @app.route("/api/transactions", methods=["GET"])
 def get_transactions():
     """유저 입출금 기록 (최신순, 최대 50건)"""
@@ -1676,16 +1707,15 @@ def get_transactions():
         return jsonify({"error": str(e)}), 500
 
 
-
 @app.route("/api/attendance", methods=["POST"])
 def attendance_check():
-    """매일 1회 출석 시 은행 잔고 +200000"""
+    """매일 1회 출석 시 은행 잔고 +티어별 보상"""
     try:
         auth_user, err = require_user()
         if err:
             return err
         data = request.json or {}
-        username = (data.get("username") or "").strip()
+        username = (data.get("username") or auth_user or "").strip()
         if not username:
             return jsonify({"error": "로그인이 필요합니다."}), 400
 
@@ -1696,7 +1726,7 @@ def attendance_check():
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT cash, COALESCE(last_attendance, ''), COALESCE(total_rolling, 0) FROM users WHERE username = %s",
+            "SELECT cash, COALESCE(last_attendance, ''), COALESCE(total_rolling, 0) FROM users WHERE username = %s FOR UPDATE",
             (username,),
         )
         row = cursor.fetchone()
@@ -1713,8 +1743,8 @@ def attendance_check():
 
         new_cash = cash + reward
         cursor.execute(
-            "UPDATE users SET cash = %s, last_attendance = %s WHERE username = %s",
-            (new_cash, today, username),
+            "UPDATE users SET cash = %s, last_attendance = %s, last_seen = %s WHERE username = %s",
+            (new_cash, today, time.time(), username),
         )
         log_transaction(cursor, username, "출석보상", reward, new_cash, f"{today} 출석체크")
         conn.commit()
@@ -1770,10 +1800,6 @@ def admin_bulk_pay():
     except Exception as e:
         print(f"Bulk pay error: {e}")
         return jsonify({"error": str(e)}), 500
-
-
-
-
 
 
 @app.route("/api/force_reload", methods=["GET"])
@@ -1841,8 +1867,8 @@ def admin_rename():
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute(
-            "UPDATE users SET display_name = %s WHERE username = %s",
-            (new_name, username),
+            "UPDATE users SET display_name = %s, last_seen = %s WHERE username = %s",
+            (new_name, time.time(), username),
         )
         if cursor.rowcount == 0:
             cursor.close(); release_db(conn)
@@ -1867,7 +1893,7 @@ def admin_suspend():
         suspend = bool(data.get("suspend", True))
         if not username:
             return jsonify({"error": "username required"}), 400
-        if username == "abcd051410":
+        if username == ADMIN_USER:
             return jsonify({"error": "관리자 계정은 정지할 수 없습니다."}), 400
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -1926,7 +1952,7 @@ def change_name():
         if not row:
             cursor.close(); release_db(conn)
             return jsonify({"error": "계정을 찾을 수 없습니다."}), 400
-        if row[0] != password:
+        if not verify_password(password, row[0] or ""):
             cursor.close(); release_db(conn)
             return jsonify({"error": "비밀번호가 일치하지 않습니다."}), 400
         old_name = row[1] or ""
@@ -1934,8 +1960,8 @@ def change_name():
             cursor.close(); release_db(conn)
             return jsonify({"error": "기존과 다른 이름을 입력해주세요."}), 400
         cursor.execute(
-            "UPDATE users SET display_name = %s, suspended = FALSE WHERE username = %s",
-            (new_name, username),
+            "UPDATE users SET display_name = %s, suspended = FALSE, last_seen = %s WHERE username = %s",
+            (new_name, time.time(), username),
         )
         conn.commit()
         cursor.close(); release_db(conn)
@@ -1988,6 +2014,26 @@ def messages_unread():
         return jsonify({"count": int(count)})
     except Exception as e:
         return jsonify({"count": 0})
+
+
+@app.route("/api/health", methods=["GET"])
+def health():
+    """서버 상태 체크"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT 1")
+        cursor.fetchone()
+        cursor.close(); release_db(conn)
+        return jsonify({
+            "status": "ok",
+            "time": time.time(),
+            "difficulty": DIFFICULTY_CONFIG.get("mode"),
+            "force_reload_id": FORCE_RELOAD.get("id", 0),
+            "notice_id": CURRENT_NOTICE.get("id") or "",
+        })
+    except Exception as e:
+        return jsonify({"status": "error", "error": str(e)}), 500
 
 
 if __name__ == "__main__":
