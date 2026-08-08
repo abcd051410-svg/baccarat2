@@ -520,16 +520,16 @@ img,svg,canvas,video{max-width:100%;height:auto}
 <div class="admin-pane" id="admin-pane-tools">
 <div class="admin-section-title">🎮 게임 난이도 (전 유저 공통)</div>
 <div class="diff-admin-row">
-<button type="button" id="diff-btn-easy" onclick="adminSetDifficulty('easy')">쉬움<br><span style="font-size:.65rem;font-weight:600">RTP 87%</span></button>
-<button type="button" id="diff-btn-normal" onclick="adminSetDifficulty('normal')">보통<br><span style="font-size:.65rem;font-weight:600">RTP 97%</span></button>
-<button type="button" id="diff-btn-hard" onclick="adminSetDifficulty('hard')">어려움<br><span style="font-size:.65rem;font-weight:600">RTP 107%</span></button>
+<button type="button" id="diff-btn-easy" onclick="adminSetDifficulty('easy')">쉬움<br><span style="font-size:.65rem;font-weight:600">RTP 90%</span></button>
+<button type="button" id="diff-btn-normal" onclick="adminSetDifficulty('normal')">보통<br><span style="font-size:.65rem;font-weight:600">RTP 96%</span></button>
+<button type="button" id="diff-btn-hard" onclick="adminSetDifficulty('hard')">어려움<br><span style="font-size:.65rem;font-weight:600">RTP 99%</span></button>
 </div>
 <div style="font-size:.72rem;color:#888;margin-bottom:8px">변경 시 모든 유저 배당에 즉시 반영 · 추가 서버 비용 없음</div>
 <div class="admin-section-title" style="margin-top:10px">📊 난이도별 하우 수익 (누적)</div>
 <div id="diff-stats-box" style="background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:12px;margin-bottom:12px;font-size:.82rem;line-height:1.6">
-  <div>쉬움 (87%): <b id="stat-easy" style="color:#86efac">₩0</b></div>
-  <div>보통 (97%): <b id="stat-normal" style="color:#fde68a">₩0</b></div>
-  <div>어려움 (107%): <b id="stat-hard" style="color:#fca5a5">₩0</b></div>
+  <div>쉬움 (90%): <b id="stat-easy" style="color:#86efac">₩0</b></div>
+  <div>보통 (96%): <b id="stat-normal" style="color:#fde68a">₩0</b></div>
+  <div>어려움 (99%): <b id="stat-hard" style="color:#fca5a5">₩0</b></div>
   <div style="font-size:.7rem;color:#888;margin-top:4px">양수 = 하우 이익 · 음수 = 하우 지급</div>
 </div>
 
@@ -585,7 +585,7 @@ img,svg,canvas,video{max-width:100%;height:auto}
 <button class="sidebar-btn logout-btn" onclick="handleLogout()">로그아웃</button>
 </div></div>
 <div class="screen active" id="screen-lobby">
-<div class="header-bar"><div class="header-left"><div class="header-title" id="header-nickname">ROYAL CASINO</div><div id="diff-banner" class="diff-banner normal">보통 · 97%</div></div><button class="menu-btn" onclick="toggleSidebar(true)">메뉴<span class="menu-unread" data-menu-unread>0</span></button></div>
+<div class="header-bar"><div class="header-left"><div class="header-title" id="header-nickname">ROYAL CASINO</div><div id="diff-banner" class="diff-banner normal">보통 · 96%</div></div><button class="menu-btn" onclick="toggleSidebar(true)">메뉴<span class="menu-unread" data-menu-unread>0</span></button></div>
 <div class="lobby-hero"><h1>ROYAL CASINO</h1><p>티어 · 미션 · 솔로 시뮬레이션</p><p style="font-size:.68rem;color:#6b7280;margin-top:4px">플레이 전 메뉴에서 은행 → 보유금 출금</p></div>
 <div class="lobby-container">
 <div class="lobby-card" onclick="enterGame('baccarat')"><div class="lobby-icon">🃏</div><div class="lobby-info"><div class="lobby-title">바카라</div><div class="lobby-desc">플레이어 · 뱅커 · 타이 · 페어</div></div><div class="lobby-arrow">›</div></div>
@@ -627,7 +627,7 @@ img,svg,canvas,video{max-width:100%;height:auto}
 <div class="status-capsule" id="dt-status-capsule">배팅을 진행해주세요</div>
 <div class="multi-banner"><div class="multi-badge show" id="dt-multi-badge"><span id="dt-multi-text">♠ 스페이드 2배</span></div></div>
 <div id="dt-multi-info" style="text-align:center;font-size:.72rem;color:#fbbf24;margin-bottom:6px;line-height:1.4">승리 카드 문양이 배수 문양과 같으면 배수 지급 · 다르면 1:1</div>
-<div class="multi-fee" style="text-align:center;margin-bottom:6px">수수료 1,000원당 40원(배팅 즉시 차감) · 용/호 타이 시 50% · TIE 8:1</div>
+<div class="multi-fee" style="text-align:center;margin-bottom:6px">수수료 1,000원당 60원(배팅 즉시 차감) · 용/호 타이 시 50% · TIE 8:1</div>
 <div class="hands-container"><div class="hand-column"><div class="hand-label label-d">🐉 DRAGON <span class="hand-score" id="score-d">-</span></div><div class="cards-box" id="dragon-card-box"></div></div>
 <div class="hand-column"><div class="hand-label label-t">🐅 TIGER <span class="hand-score" id="score-tg">-</span></div><div class="cards-box" id="tiger-card-box"></div></div></div></div>
 <div class="betting-table"><div class="main-bet-row" style="height:96px">
@@ -907,11 +907,14 @@ function rankValueFull(card){
 function rankValue(card){ return rankValueFull(card); }
 /** 용호 배수 추첨 */
 function rollDTMultiplier(){
+  // 문양 일치 시 '순수 배수'(이익 배수). 지급 = 배팅 + 배팅×배수
+  // 분포는 평균 약 2.2배 → 수수료와 합쳐 보통 RTP ~96% 목표
   const r = Math.random();
-  if(r < 0.55) return 2;
-  if(r < 0.78) return 3;
-  if(r < 0.90) return 4;
-  if(r < 0.97) return 5;
+  if(r < 0.62) return 1;   // 1:1과 동일 (총 2배 지급)
+  if(r < 0.82) return 2;
+  if(r < 0.92) return 3;
+  if(r < 0.97) return 4;
+  if(r < 0.995) return 5;
   return 8;
 }
 
@@ -1007,7 +1010,7 @@ const HL_RANKS=[{n:'A',v:1},{n:'2',v:2},{n:'3',v:3},{n:'4',v:4},{n:'5',v:5},{n:'
 const MIN_BET=500,MAX_BET=5000000,MAX_BET_BACC=50000000;
 const GAME_HELP={
 baccarat:'【바카라】\n\n• 칩을 고른 뒤 PLAYER / BANKER / TIE 구역을 터치해 배팅합니다.\n• PLAYER와 BANKER에는 동시에 배팅할 수 없습니다.\n• 배당: PLAYER 1:1 · BANKER 1:0.95 · TIE 8:1\n• 페어·퍼펙트페어는 추가 사이드 배팅입니다.\n• 배팅 시간(약 12초) 안에만 배팅할 수 있습니다.\n• 보유금이 없으면 메뉴에서 은행 잔고를 출금하세요.\n• 최소 배팅 ₩500',
-dragontiger:'【용호】\n\n• 칩 선택 후 DRAGON / TIGER / TIE에 배팅합니다.\n• DRAGON과 TIGER 동시 배팅은 불가합니다.\n• 한 장씩 비교해 높은 쪽이 승리합니다.\n• 배수·슈트 보너스가 표시될 수 있습니다.\n• 배팅 시간 안에만 배팅 가능합니다.\n• 최소 배팅 ₩500',
+dragontiger:'【용호】\n\n• 지급 공식: 지급 = 배팅금액 + 배팅금액×배수\n• 기본 승리(1:1): 배수 1 → 배팅×2 지급\n• 문양 일치 시: 표시 배수 적용 (배팅+배팅×배수)\n• TIE 적중: 배수 8 → 배팅×9 지급\n• 용/호 타이 시 해당 배팅 50% 환불\n• 수수료: 1,000원당 60원 (6%, 배팅 시 차감)\n• DRAGON과 TIGER 동시 배팅 불가\n• 최소 배팅 ₩500',
 highlow:'【하이로우】\n\n• 배팅액을 고른 뒤 시작을 누릅니다.\n• 다음 카드가 현재보다 높을지(High)·낮을지(Low)·같은지(Same) 예측합니다.\n• 연속 성공 시 배당이 누적되고 캐시아웃으로 확정할 수 있습니다.\n• 틀리면 해당 라운드 배팅금을 잃습니다.\n• 최소 배팅 ₩500',
 roulette:'【룰렛】\n\n• 칩 선택 후 레드/블랙/홀/짝/제로 중 하나에 배팅합니다.\n• 한 라운드에 한 가지 타입만 선택합니다.\n• SPIN으로 결과를 확정합니다.\n• 최소 배팅 ₩500',
 blackjack:'【블랙잭】\n\n• 칩 선택 후 DEAL을 누릅니다.\n• 21에 가까운 쪽이 승리합니다. (버스트 시 패배)\n• HIT=카드 추가, STAND=멈추기\n• 블랙잭(21)은 보통 3:2 배당이 적용됩니다.\n• 최소 배팅 ₩500',
@@ -1431,7 +1434,7 @@ function shouldBankerDraw(bScore, playerThirdVal){
 }
 
 async function runBaccaratGame(serverPayload){const deck=createDeck(),pBox=document.getElementById('player-card-box'),bBox=document.getElementById('banker-card-box');if(!pBox||!bBox)return;pBox.innerHTML='';bBox.innerHTML='';let pHand,bHand;if(serverPayload&&serverPayload.player&&serverPayload.banker){pHand=serverPayload.player.map(c=>({suit:c.suit,name:c.name,val:c.val}));bHand=serverPayload.banker.map(c=>({suit:c.suit,name:c.name,val:c.val}));}else{pHand=[deck.pop(),deck.pop()];bHand=[deck.pop(),deck.pop()];}const els=[];const initialPairs=[[pHand[0],pBox],[bHand[0],bBox],[pHand[1],pBox],[bHand[1],bBox]];for(const [h,box] of initialPairs){const el=createCardElement(h);box.appendChild(el);els.push(el);await delay(800);}await delay(800);els[0].classList.add('flipped');try{sfxCard();}catch(e){};document.getElementById('score-p').innerText=getScore([pHand[0]]);await delay(800);els[1].classList.add('flipped');try{sfxCard();}catch(e){};document.getElementById('score-b').innerText=getScore([bHand[0]]);await delay(800);els[2].classList.add('flipped');try{sfxCard();}catch(e){};let pScore=getScore([pHand[0],pHand[1]]);document.getElementById('score-p').innerText=pScore;await delay(800);els[3].classList.add('flipped');try{sfxCard();}catch(e){};let bScore=getScore([bHand[0],bHand[1]]);document.getElementById('score-b').innerText=bScore;await delay(800);if(serverPayload&&serverPayload.player){for(let i=2;i<pHand.length;i++){const el=createCardElement(pHand[i]);pBox.appendChild(el);await delay(800);el.classList.add('flipped');try{sfxCard();}catch(e){};pScore=getScore(pHand.slice(0,i+1));document.getElementById('score-p').innerText=pScore;await delay(400);}for(let i=2;i<bHand.length;i++){const el=createCardElement(bHand[i]);bBox.appendChild(el);await delay(800);el.classList.add('flipped');try{sfxCard();}catch(e){};bScore=getScore(bHand.slice(0,i+1));document.getElementById('score-b').innerText=bScore;await delay(400);}pScore=getScore(pHand);bScore=getScore(bHand);}else if(pScore<8&&bScore<8){let p3=null;if(pScore<=5){p3=deck.pop();pHand.push(p3);const el=createCardElement(p3);pBox.appendChild(el);await delay(800);el.classList.add('flipped');try{sfxCard();}catch(e){};pScore=getScore(pHand);document.getElementById('score-p').innerText=pScore;await delay(800);}if(shouldBankerDraw(bScore,p3?p3.val:null)){const b3=deck.pop();bHand.push(b3);const el=createCardElement(b3);bBox.appendChild(el);await delay(800);el.classList.add('flipped');try{sfxCard();}catch(e){};bScore=getScore(bHand);document.getElementById('score-b').innerText=bScore;await delay(800);}}await settleRound(pScore,bScore,pHand,bHand);}
-async function settleRound(pScore,bScore,pHand,bHand){let win='TIE';if(pScore>bScore)win='PLAYER';else if(bScore>pScore)win='BANKER';const isPP=pHand[0].name===pHand[1].name,isBP=bHand[0].name===bHand[1].name;const isPerf=(isPP&&pHand[0].suit===pHand[1].suit)||(isBP&&bHand[0].suit===bHand[1].suit);const totalBet=Object.values(bets).reduce((a,b)=>a+b,0);let pay=0;if(win==='PLAYER'&&bets.PLAYER>0)pay+=bets.PLAYER*2;else if(win==='BANKER'&&bets.BANKER>0)pay+=Math.floor(bets.BANKER*1.95);else if(win==='TIE'){if(bets.TIE>0)pay+=bets.TIE*9;pay+=bets.PLAYER+bets.BANKER;}if(isPP&&bets.P_PAIR>0)pay+=bets.P_PAIR*12;if(isBP&&bets.B_PAIR>0)pay+=bets.B_PAIR*12;if(isPerf&&bets.PERFECT_PAIR>0)pay+=bets.PERFECT_PAIR*26;pay=Math.floor(pay);pay=diffMult(pay);const houseDelta=totalBet-pay;if(totalBet>0&&houseDelta)collectHouse(houseDelta,'바카라 · '+(currentUser||''));if(totalBet>0){reportMission('play_baccarat');reportMission('play_any');if(pay>totalBet)reportMission('win_any');else if(pay<totalBet)reportLoss(totalBet-pay);}cash=Math.floor(cash+pay);checkBrokeReset();const paidEl=document.getElementById('paid-val');if(paidEl)paidEl.innerText=pay.toLocaleString();syncAllCashUI();updateUIValues();await updateServerData(0);showResultEffect(win,pay-totalBet,totalBet,'baccarat');updateBigRoad(win,true,'baccarat');bets={PLAYER:0,BANKER:0,TIE:0,P_PAIR:0,B_PAIR:0,PERFECT_PAIR:0};lastBetsBacc=[];document.querySelectorAll('#screen-baccarat .chip-placed').forEach(e=>{e.style.display='none';});['PLAYER','BANKER','TIE','P_PAIR','B_PAIR','PERFECT_PAIR'].forEach(k=>{const v=document.getElementById('val-'+k);if(v)v.innerText='0';});}
+async function settleRound(pScore,bScore,pHand,bHand){let win='TIE';if(pScore>bScore)win='PLAYER';else if(bScore>pScore)win='BANKER';const isPP=pHand[0].name===pHand[1].name,isBP=bHand[0].name===bHand[1].name;const isPerf=(isPP&&pHand[0].suit===pHand[1].suit)||(isBP&&bHand[0].suit===bHand[1].suit);const totalBet=Object.values(bets).reduce((a,b)=>a+b,0);let pay=0;if(win==='PLAYER'&&bets.PLAYER>0)pay+=bets.PLAYER*2;else if(win==='BANKER'&&bets.BANKER>0)pay+=Math.floor(bets.BANKER*1.95);else if(win==='TIE'){if(bets.TIE>0)pay+=bets.TIE*9;pay+=bets.PLAYER+bets.BANKER;}if(isPP&&bets.P_PAIR>0)pay+=bets.P_PAIR*12;if(isBP&&bets.B_PAIR>0)pay+=bets.B_PAIR*12;if(isPerf&&bets.PERFECT_PAIR>0)pay+=bets.PERFECT_PAIR*26;pay=Math.floor(pay);pay=diffPayout(totalBet,pay);const houseDelta=totalBet-pay;if(totalBet>0&&houseDelta)collectHouse(houseDelta,'바카라 · '+(currentUser||''));if(totalBet>0){reportMission('play_baccarat');reportMission('play_any');if(pay>totalBet)reportMission('win_any');else if(pay<totalBet)reportLoss(totalBet-pay);}cash=Math.floor(cash+pay);checkBrokeReset();const paidEl=document.getElementById('paid-val');if(paidEl)paidEl.innerText=pay.toLocaleString();syncAllCashUI();updateUIValues();await updateServerData(0);showResultEffect(win,pay-totalBet,totalBet,'baccarat');updateBigRoad(win,true,'baccarat');bets={PLAYER:0,BANKER:0,TIE:0,P_PAIR:0,B_PAIR:0,PERFECT_PAIR:0};lastBetsBacc=[];document.querySelectorAll('#screen-baccarat .chip-placed').forEach(e=>{e.style.display='none';});['PLAYER','BANKER','TIE','P_PAIR','B_PAIR','PERFECT_PAIR'].forEach(k=>{const v=document.getElementById('val-'+k);if(v)v.innerText='0';});}
 function updateBigRoad(result,auto,game){const isB=game==='baccarat',gid=isB?'big-road-grid':'dt-road-grid';let lastW=isB?lastWinner:lastWinnerDT,col=isB?currentCol:currentColDT,row=isB?currentRow:currentRowDT,matrix=isB?roadMatrix:roadMatrixDT;if(result==='TIE'){if(lastW!==null){const t=document.getElementById(gid+'_cell_'+col+'_'+row);if(t&&t.firstChild)t.firstChild.classList.add('tie-line');}return;}if(lastW===null){col=0;row=0;}else if(lastW===result){if(row<5&&!matrix[col+'_'+(row+1)])row++;else col++;}else{col++;row=0;while(matrix[col+'_'+row])col++;}lastW=result;matrix[col+'_'+row]={winner:result};if(isB){lastWinner=lastW;currentCol=col;currentRow=row;roadMatrix=matrix;}else{lastWinnerDT=lastW;currentColDT=col;currentRowDT=row;roadMatrixDT=matrix;}const cell=document.getElementById(gid+'_cell_'+col+'_'+row);if(cell){const cir=document.createElement('div');let cls='road-P';if(result==='BANKER')cls='road-B';else if(result==='TIGER')cls='road-Tg';else if(result==='DRAGON')cls='road-D';cir.className='road-circle '+cls;cell.appendChild(cir);if(auto)scrollToLatestRoad(game);}}
 function showResultEffect(win,net,total,game){
   try{if(net>0)sfxWin();else if(net<0)sfxLose();else sfxTie();}catch(e){}
@@ -1523,8 +1526,7 @@ async function startLiveLoopDT(){
     if(mt)mt.innerText=suitObj.sym+' '+suitObj.name+' '+currentDTMulti+'배';
     if(badge)badge.classList.add('show');
     if(info){
-      const factor=(1.85+currentDTMulti*0.15).toFixed(2);
-      info.innerText='['+suitObj.name+'] 일치 시 ×'+factor+' 지급 · 다른 문양 ×2(1:1) · 용/호 타이 50% · TIE×9';
+      info.innerText='['+suitObj.name+'] 일치 시 지급=배팅+배팅×'+currentDTMulti+' · 기본 승리 배팅×2 · 타이 50% · TIE=배팅+배팅×8 · 수수료 6%';
     }
     isBettingOpenDT=true;
     setZoneDisabledDT(false);
@@ -1557,7 +1559,73 @@ async function startLiveLoopDT(){
   }
 }
 async function runDragonTigerGame(serverPayload){const deck=createDeck(),dBox=document.getElementById('dragon-card-box'),tBox=document.getElementById('tiger-card-box');if(!dBox||!tBox)return;dBox.innerHTML='';tBox.innerHTML='';let dC,tC;if(serverPayload&&serverPayload.dragon&&serverPayload.tiger){dC={suit:serverPayload.dragon.suit,name:serverPayload.dragon.name,val:serverPayload.dragon.val};tC={suit:serverPayload.tiger.suit,name:serverPayload.tiger.name,val:serverPayload.tiger.val};}else{dC=deck.pop();tC=deck.pop();}const dEl=createCardElement(dC);dBox.appendChild(dEl);await delay(800);const tEl=createCardElement(tC);tBox.appendChild(tEl);await delay(800);dEl.classList.add('flipped');try{sfxCard();}catch(e){};document.getElementById('score-d').innerText=rankValueFull(dC);await delay(800);tEl.classList.add('flipped');try{sfxCard();}catch(e){};document.getElementById('score-tg').innerText=rankValueFull(tC);await delay(800);await settleRoundDT(dC,tC);}
-async function settleRoundDT(dCard,tCard){const dV=rankValueFull(dCard),tV=rankValueFull(tCard);let win='TIE';if(dV>tV)win='DRAGON';else if(tV>dV)win='TIGER';const total=Object.values(betsDT).reduce((a,b)=>a+b,0);let pay=0;const m=currentDTMulti||2;const multiSuit=currentDTSuit;let multiHit=false;if(win==='TIE'){if(betsDT.DRAGON>0)pay+=Math.floor(betsDT.DRAGON*0.5);if(betsDT.TIGER>0)pay+=Math.floor(betsDT.TIGER*0.5);if(betsDT.TIE>0)pay+=betsDT.TIE*9;}else if(win==='DRAGON'&&betsDT.DRAGON>0){const s=suitNameFromCard(dCard);multiHit=(s===multiSuit);const multiPay=Math.floor(betsDT.DRAGON*(1.85+m*0.15));pay+=multiHit?multiPay:(betsDT.DRAGON*2);}else if(win==='TIGER'&&betsDT.TIGER>0){const s=suitNameFromCard(tCard);multiHit=(s===multiSuit);const multiPayT=Math.floor(betsDT.TIGER*(1.85+m*0.15));pay+=multiHit?multiPayT:(betsDT.TIGER*2);}pay=Math.floor(pay);pay=diffMult(pay);const houseDeltaDT=total-pay;if(total>0&&houseDeltaDT)collectHouse(houseDeltaDT,'용호 · '+(currentUser||''));cash=Math.floor(cash+pay);checkBrokeReset();const dtp=document.getElementById('dt-paid-val');if(dtp)dtp.innerText=pay.toLocaleString();syncAllCashUI();updateUIValues();await updateServerData(0);const titleExtra=multiHit?(' · '+multiSuit+' ×'+m):'';if(multiHit){const t=document.getElementById('dt-result-title');showResultEffect(win,pay-total,total,'dragontiger');if(t)t.innerText=win+' WIN! '+multiSuit+' ×'+m;}else showResultEffect(win,pay-total,total,'dragontiger');updateBigRoad(win,true,'dragontiger');betsDT={DRAGON:0,TIGER:0,TIE:0};lastBetsDT=[];document.querySelectorAll('#screen-dragontiger .chip-stack').forEach(e=>e.style.display='none');}
+async function settleRoundDT(dCard,tCard){
+  const dV=rankValueFull(dCard), tV=rankValueFull(tCard);
+  let win='TIE';
+  if(dV>tV) win='DRAGON';
+  else if(tV>dV) win='TIGER';
+  const total=Object.values(betsDT).reduce((a,b)=>a+b,0);
+  let pay=0;
+  const m=currentDTMulti||1;
+  const multiSuit=currentDTSuit;
+  let multiHit=false;
+  /**
+   * 지급 공식: 지급 = 배팅금액 + 배팅금액×배수
+   *  - 일반 승리(1:1): 배수=1 → 배팅×2
+   *  - 문양 일치: 표시 배수 m → 배팅 + 배팅×m
+   *  - TIE 배팅: 8:1 → 배팅 + 배팅×8 = 배팅×9
+   *  - 용/호 타이: 배팅의 50% 환불
+   */
+  if(win==='TIE'){
+    if(betsDT.DRAGON>0) pay+=Math.floor(betsDT.DRAGON*0.5);
+    if(betsDT.TIGER>0) pay+=Math.floor(betsDT.TIGER*0.5);
+    if(betsDT.TIE>0){
+      const tb=betsDT.TIE;
+      pay+= tb + tb*8; // 배팅 + 배팅×8
+    }
+  }else if(win==='DRAGON'&&betsDT.DRAGON>0){
+    const s=suitNameFromCard(dCard);
+    multiHit=(s===multiSuit);
+    const b=betsDT.DRAGON;
+    const odds=multiHit?m:1; // 순수 배수
+    pay+= b + b*odds;
+  }else if(win==='TIGER'&&betsDT.TIGER>0){
+    const s=suitNameFromCard(tCard);
+    multiHit=(s===multiSuit);
+    const b=betsDT.TIGER;
+    const odds=multiHit?m:1;
+    pay+= b + b*odds;
+  }
+  pay=Math.floor(pay);
+  pay=diffPayout(total,pay);
+  const houseDeltaDT=total-pay;
+  if(total>0&&houseDeltaDT) collectHouse(houseDeltaDT,'용호 · '+(currentUser||''));
+  cash=Math.floor(cash+pay);
+  checkBrokeReset();
+  const dtp=document.getElementById('dt-paid-val');
+  if(dtp) dtp.innerText=pay.toLocaleString();
+  syncAllCashUI();
+  updateUIValues();
+  await updateServerData(0);
+  const titleExtra=multiHit?(' · '+multiSuit+' ×'+m):'';
+  if(multiHit){
+    const t=document.getElementById('dt-result-title');
+    showResultEffect(win,pay-total,total,'dragontiger');
+    if(t) t.innerText=win+' WIN! '+multiSuit+' ×'+m;
+  }else{
+    showResultEffect(win,pay-total,total,'dragontiger');
+  }
+  updateBigRoad(win,true,'dragontiger');
+  betsDT={DRAGON:0,TIGER:0,TIE:0};
+  lastBetsDT=[];
+  document.querySelectorAll('#screen-dragontiger .chip-placed').forEach(e=>{e.style.display='none';});
+  ['val-DRAGON','val-TIGER','val-DT_TIE'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerText='0';});
+  if(total>0){
+    reportMission('play_any');
+    if(pay>total) reportMission('win_any');
+    else if(pay<total) reportLoss(total-pay);
+  }
+}
 function placeBetDT(type){
   if(!isBettingOpenDT)return;
   const key=type==='TIE'?'TIE':type;
@@ -1568,7 +1636,7 @@ function placeBetDT(type){
   const lim=getTierMaxBet(false);
   let amt=selectedChip==='ALLIN'?Math.min(Math.floor(cash),lim-(betsDT[key]||0)):Math.floor(Number(selectedChip)||0);
   if(selectedChip==='ALLIN'){
-    while(amt>0&&amt+Math.floor(amt/1000)*40>cash)amt--;
+    while(amt>0&&amt+Math.floor(amt/1000)*60>cash)amt--;
   }
   if(!amt||amt<=0)return;
   if(amt<MIN_BET&&!(betsDT[key]>0)){
@@ -1578,10 +1646,10 @@ function placeBetDT(type){
   if((betsDT[key]||0)+amt>lim){
     amt=lim-(betsDT[key]||0);
     if(amt<=0)return;
-    while(amt>0&&amt+Math.floor(amt/1000)*40>cash)amt--;
+    while(amt>0&&amt+Math.floor(amt/1000)*60>cash)amt--;
     if(amt<=0)return;
   }
-  const fee=Math.floor(amt/1000)*40;
+  const fee=Math.floor(amt/1000)*60;
   const need=amt+fee;
   if(cash<need)return;
   cash-=need;
@@ -1627,16 +1695,16 @@ async function undoLastBet(){if(!isBettingOpen){alert('배팅 시간에만 취�
 async function undoLastBetDT(){if(!isBettingOpenDT){alert('배팅 시간에만 취소할 수 있습니다.');return;}if(!lastBetsDT.length){alert('취소할 배팅이 없습니다.');return;}const last=lastBetsDT.pop();const t=last.type,a=last.amt,f=last.fee||0;betsDT[t]=Math.max(0,(betsDT[t]||0)-a);cash+=a+f;if(f>0)collectHouse(-f,'용호수수료환급 · '+(currentUser||''));const chipId=t==='TIE'?'chip-DT_TIE':'chip-'+t,valId=t==='TIE'?'val-DT_TIE':'val-'+t;const chip=document.getElementById(chipId),val=document.getElementById(valId);if(chip&&val){if(betsDT[t]>0){val.innerText=formatBetText(betsDT[t]);chip.style.display='flex';}else{chip.style.display='none';val.innerText='0';}}document.getElementById('dt-cash-val').innerText=Math.floor(cash).toLocaleString();document.getElementById('dt-bet-val').innerText=Math.floor(Object.values(betsDT).reduce((a,b)=>a+b,0)).toLocaleString();syncAllCashUI();updateServerData(0);}
 
 function selectRlBet(el,type){document.querySelectorAll('.rl-bet').forEach(b=>b.classList.remove('selected'));el.classList.add('selected');rlBetType=type;const labels={red:'RED',black:'BLACK',zero:'ZERO',odd:'홀 (×1.96)',even:'짝 (×1.96)',low:'1-18'};document.getElementById('rl-bet-label').innerText=labels[type]||type;}
-async function spinRoulette(){if(rlSpinning)return;if(!rlBetType){alert('배팅을 선택하세요');return;}let amt=selectedChip==='ALLIN'?Math.min(cash,getTierMaxBet(false)):selectedChip;if(selectedChip!=='ALLIN'&&amt<MIN_BET){alert('최소 배팅 ₩'+MIN_BET.toLocaleString());return;}if(amt>MAX_BET)amt=MAX_BET;if(cash<amt||amt<=0){alert('보유금 부족');return;}rlSpinning=true;document.getElementById('rl-spin-btn').disabled=true;cash-=amt;syncAllCashUI();await updateServerData(amt);const num=Math.floor(Math.random()*37);const wheel=document.getElementById('rl-wheel');const base=3600+Math.random()*360;wheel.style.transition='none';wheel.style.transform='rotate(0deg)';void wheel.offsetWidth;wheel.style.transition='transform 4s cubic-bezier(.15,.7,.1,1)';wheel.style.transform='rotate('+base+'deg)';await delay(4200);const isRed=RL_REDS.has(num),isBlack=num!==0&&!isRed;document.getElementById('rl-result-num').innerText=num===0?'0 (그린)':num+' ('+(isRed?'RED':'BLACK')+')';document.getElementById('rl-result-num').style.color=num===0?'#4ade80':isRed?'#f87171':'#e2e8f0';let pay=0;if(rlBetType==='red'&&isRed)pay=amt*2;else if(rlBetType==='black'&&isBlack)pay=amt*2;else if(rlBetType==='zero'&&num===0)pay=amt*36;else if(rlBetType==='odd'&&num!==0&&num%2===1)pay=amt*2;else if(rlBetType==='even'&&num!==0&&num%2===0)pay=amt*2;else if(rlBetType==='low'&&num>=1&&num<=18)pay=amt*2;pay=diffMult(pay);const hg=amt-pay;if(hg)collectHouse(hg,'룰렛 · '+(currentUser||''));cash+=pay;checkBrokeReset();syncAllCashUI();await updateServerData(0);if(pay>0)alert('적중! +₩'+(pay-amt).toLocaleString());rlSpinning=false;document.getElementById('rl-spin-btn').disabled=false;}
+async function spinRoulette(){if(rlSpinning)return;if(!rlBetType){alert('배팅을 선택하세요');return;}let amt=selectedChip==='ALLIN'?Math.min(cash,getTierMaxBet(false)):selectedChip;if(selectedChip!=='ALLIN'&&amt<MIN_BET){alert('최소 배팅 ₩'+MIN_BET.toLocaleString());return;}if(amt>MAX_BET)amt=MAX_BET;if(cash<amt||amt<=0){alert('보유금 부족');return;}rlSpinning=true;document.getElementById('rl-spin-btn').disabled=true;cash-=amt;syncAllCashUI();await updateServerData(amt);const num=Math.floor(Math.random()*37);const wheel=document.getElementById('rl-wheel');const base=3600+Math.random()*360;wheel.style.transition='none';wheel.style.transform='rotate(0deg)';void wheel.offsetWidth;wheel.style.transition='transform 4s cubic-bezier(.15,.7,.1,1)';wheel.style.transform='rotate('+base+'deg)';await delay(4200);const isRed=RL_REDS.has(num),isBlack=num!==0&&!isRed;document.getElementById('rl-result-num').innerText=num===0?'0 (그린)':num+' ('+(isRed?'RED':'BLACK')+')';document.getElementById('rl-result-num').style.color=num===0?'#4ade80':isRed?'#f87171':'#e2e8f0';let pay=0;if(rlBetType==='red'&&isRed)pay=amt*2;else if(rlBetType==='black'&&isBlack)pay=amt*2;else if(rlBetType==='zero'&&num===0)pay=amt*36;else if(rlBetType==='odd'&&num!==0&&num%2===1)pay=amt*2;else if(rlBetType==='even'&&num!==0&&num%2===0)pay=amt*2;else if(rlBetType==='low'&&num>=1&&num<=18)pay=amt*2;pay=diffPayout(amt,pay);const hg=amt-pay;if(hg)collectHouse(hg,'룰렛 · '+(currentUser||''));cash+=pay;checkBrokeReset();syncAllCashUI();await updateServerData(0);if(pay>0)alert('적중! +₩'+(pay-amt).toLocaleString());rlSpinning=false;document.getElementById('rl-spin-btn').disabled=false;}
 
 function resetBJ(){bjActive=false;bjBet=0;bjPlayer=[];bjDealer=[];document.getElementById('bj-dealer-box').innerHTML='';document.getElementById('bj-player-box').innerHTML='';document.getElementById('bj-d-score').innerText='-';document.getElementById('bj-p-score').innerText='-';document.getElementById('bj-result').innerText='';document.getElementById('bj-bet-val').innerText='0';document.getElementById('bj-status').innerText='배팅 후 DEAL';document.getElementById('bj-deal-btn').style.display='block';document.getElementById('bj-actions').style.display='none';}
 async function dealBlackjack(){if(bjActive)return;let amt=selectedChip==='ALLIN'?Math.min(cash,getTierMaxBet(false)):selectedChip;if(selectedChip!=='ALLIN'&&amt<MIN_BET){alert('최소 배팅 ₩'+MIN_BET.toLocaleString());return;}if(amt>MAX_BET)amt=MAX_BET;if(cash<amt||amt<=0){alert('보유금 부족');return;}cash-=amt;bjBet=amt;bjActive=true;syncAllCashUI();document.getElementById('bj-bet-val').innerText=Math.floor(amt).toLocaleString();await updateServerData(amt);bjDeck=createBJDeck();bjPlayer=[bjDeck.pop(),bjDeck.pop()];bjDealer=[bjDeck.pop(),bjDeck.pop()];const pBox=document.getElementById('bj-player-box'),dBox=document.getElementById('bj-dealer-box');pBox.innerHTML='';dBox.innerHTML='';for(const c of bjPlayer){const el=createCardElement(c);pBox.appendChild(el);await delay(450);el.classList.add('flipped');try{sfxCard();}catch(e){};}const d1=createCardElement(bjDealer[0]);dBox.appendChild(d1);await delay(450);d1.classList.add('flipped');try{sfxCard();}catch(e){};const d2=createCardElement(bjDealer[1]);d2.dataset.hidden='1';dBox.appendChild(d2);await delay(450);document.getElementById('bj-p-score').innerText=bjScore(bjPlayer);document.getElementById('bj-d-score').innerText=bjDealer[0].name==='A'?'A':bjDealer[0].val;document.getElementById('bj-deal-btn').style.display='none';document.getElementById('bj-actions').style.display='flex';document.getElementById('bj-status').innerText='HIT 또는 STAND';if(bjScore(bjPlayer)===21){await delay(600);await bjStand();}}
 async function bjHit(){if(!bjActive)return;const c=bjDeck.pop();bjPlayer.push(c);const el=createCardElement(c);document.getElementById('bj-player-box').appendChild(el);await delay(400);el.classList.add('flipped');try{sfxCard();}catch(e){};const s=bjScore(bjPlayer);document.getElementById('bj-p-score').innerText=s;if(s>21)await finishBJ('bust');}
 async function bjStand(){if(!bjActive)return;document.getElementById('bj-actions').style.display='none';const dBox=document.getElementById('bj-dealer-box');const hidden=dBox.querySelector('[data-hidden]');if(hidden){hidden.classList.add('flipped');try{sfxCard();}catch(e){};hidden.removeAttribute('data-hidden');}await delay(600);while(bjScore(bjDealer)<17){const c=bjDeck.pop();bjDealer.push(c);const el=createCardElement(c);dBox.appendChild(el);await delay(500);el.classList.add('flipped');try{sfxCard();}catch(e){};}document.getElementById('bj-d-score').innerText=bjScore(bjDealer);const ps=bjScore(bjPlayer),ds=bjScore(bjDealer);if(ps>21)await finishBJ('bust');else if(ds>21)await finishBJ('dealer_bust');else if(ps>ds)await finishBJ('win');else if(ps<ds)await finishBJ('lose');else await finishBJ('push');}
-async function finishBJ(result){bjActive=false;document.getElementById('bj-actions').style.display='none';let pay=0,msg='';if(result==='win'||result==='dealer_bust'){pay=bjBet*2;msg=result==='dealer_bust'?'딜러 버스트! 승리':'승리! +₩'+bjBet.toLocaleString();}else if(result==='push'){pay=bjBet;msg='푸시 (무승부)';}else msg=result==='bust'?'버스트... 패배':'패배';pay=diffMult(pay);const bjHouse=bjBet-pay;if(bjHouse)collectHouse(bjHouse,'블랙잭 · '+(currentUser||''));cash+=pay;checkBrokeReset();syncAllCashUI();document.getElementById('bj-result').innerText=msg;document.getElementById('bj-result').style.color=pay>bjBet?'#4ade80':pay===bjBet?'#ffd700':'#ef4444';document.getElementById('bj-status').innerText='라운드 종료';document.getElementById('bj-deal-btn').style.display='block';await updateServerData(0);}
-async function spinSlot(){const cost=3000;if(cash<cost){alert('보유금 부족 (₩3,000)');return;}const btn=document.getElementById('slot-spin-btn');btn.disabled=true;cash-=cost;syncAllCashUI();await updateServerData(cost);const reels=[document.getElementById('slot-r1'),document.getElementById('slot-r2'),document.getElementById('slot-r3')];reels.forEach(r=>r.classList.add('spinning'));document.getElementById('slot-result').innerText='스핀 중...';document.getElementById('slot-result').style.color='#ffd700';for(let i=0;i<14;i++){reels.forEach(r=>{r.innerText=SLOT_SYMS[Math.floor(Math.random()*SLOT_SYMS.length)];});await delay(70);}const final=SLOT_SYMS.map(()=>SLOT_SYMS[Math.floor(Math.random()*SLOT_SYMS.length)]);reels.forEach((r,i)=>{r.classList.remove('spinning');r.innerText=final[i];});let prize=0;if(final[0]===final[1]&&final[1]===final[2]){if(final[0]==='💎')prize=50000;else if(final[0]==='7️⃣')prize=32000;else prize=15000;document.getElementById('slot-result').innerText='🎉 잭팟! +₩'+prize.toLocaleString();document.getElementById('slot-result').style.color='#ffd700';}else if(final[0]===final[1]||final[1]===final[2]||final[0]===final[2]){prize=5400;document.getElementById('slot-result').innerText='✨ 2개 일치 +₩'+prize.toLocaleString();document.getElementById('slot-result').style.color='#4ade80';}else{document.getElementById('slot-result').innerText='꽝...';document.getElementById('slot-result').style.color='#ef4444';}const slotHouse=3000-prize;if(slotHouse)collectHouse(slotHouse,'슬롯 · '+(currentUser||''));prize=diffMult(prize);cash+=prize;checkBrokeReset();syncAllCashUI();await updateServerData(0);btn.disabled=false;}
+async function finishBJ(result){bjActive=false;document.getElementById('bj-actions').style.display='none';let pay=0,msg='';if(result==='win'||result==='dealer_bust'){pay=bjBet*2;msg=result==='dealer_bust'?'딜러 버스트! 승리':'승리! +₩'+bjBet.toLocaleString();}else if(result==='push'){pay=bjBet;msg='푸시 (무승부)';}else msg=result==='bust'?'버스트... 패배':'패배';pay=diffPayout(bjBet,pay);const bjHouse=bjBet-pay;if(bjHouse)collectHouse(bjHouse,'블랙잭 · '+(currentUser||''));cash+=pay;checkBrokeReset();syncAllCashUI();document.getElementById('bj-result').innerText=msg;document.getElementById('bj-result').style.color=pay>bjBet?'#4ade80':pay===bjBet?'#ffd700':'#ef4444';document.getElementById('bj-status').innerText='라운드 종료';document.getElementById('bj-deal-btn').style.display='block';await updateServerData(0);}
+async function spinSlot(){const cost=3000;if(cash<cost){alert('보유금 부족 (₩3,000)');return;}const btn=document.getElementById('slot-spin-btn');btn.disabled=true;cash-=cost;syncAllCashUI();await updateServerData(cost);const reels=[document.getElementById('slot-r1'),document.getElementById('slot-r2'),document.getElementById('slot-r3')];reels.forEach(r=>r.classList.add('spinning'));document.getElementById('slot-result').innerText='스핀 중...';document.getElementById('slot-result').style.color='#ffd700';for(let i=0;i<14;i++){reels.forEach(r=>{r.innerText=SLOT_SYMS[Math.floor(Math.random()*SLOT_SYMS.length)];});await delay(70);}const final=SLOT_SYMS.map(()=>SLOT_SYMS[Math.floor(Math.random()*SLOT_SYMS.length)]);reels.forEach((r,i)=>{r.classList.remove('spinning');r.innerText=final[i];});let prize=0;if(final[0]===final[1]&&final[1]===final[2]){if(final[0]==='💎')prize=50000;else if(final[0]==='7️⃣')prize=32000;else prize=15000;document.getElementById('slot-result').innerText='🎉 잭팟! +₩'+prize.toLocaleString();document.getElementById('slot-result').style.color='#ffd700';}else if(final[0]===final[1]||final[1]===final[2]||final[0]===final[2]){prize=5400;document.getElementById('slot-result').innerText='✨ 2개 일치 +₩'+prize.toLocaleString();document.getElementById('slot-result').style.color='#4ade80';}else{document.getElementById('slot-result').innerText='꽝...';document.getElementById('slot-result').style.color='#ef4444';}const slotHouse=3000-prize;if(slotHouse)collectHouse(slotHouse,'슬롯 · '+(currentUser||''));prize=diffPayout(3000,prize);cash+=prize;checkBrokeReset();syncAllCashUI();await updateServerData(0);btn.disabled=false;}
 function selectDiceBet(el,type){document.querySelectorAll('.dice-bet').forEach(b=>b.classList.remove('selected'));el.classList.add('selected');diceBetType=type;const labels={odd:'홀 (×1.96)',even:'짝 (×1.96)',over:'오버 8+',under:'언더 6-'};document.getElementById('dice-bet-label').innerText=labels[type]||type;}
-async function rollDice(){if(!diceBetType){alert('배팅을 선택하세요');return;}let amt=selectedChip==='ALLIN'?Math.min(cash,getTierMaxBet(false)):selectedChip;if(selectedChip!=='ALLIN'&&amt<MIN_BET){alert('최소 배팅 ₩'+MIN_BET.toLocaleString());return;}if(amt>MAX_BET)amt=MAX_BET;if(cash<amt||amt<=0){alert('보유금 부족');return;}document.getElementById('dice-roll-btn').disabled=true;cash-=amt;syncAllCashUI();await updateServerData(amt);const faces=['⚀','⚁','⚂','⚃','⚄','⚅'];for(let i=0;i<10;i++){document.getElementById('dice-display').innerText=faces[Math.floor(Math.random()*6)]+' '+faces[Math.floor(Math.random()*6)];await delay(60);}const d1=Math.floor(Math.random()*6)+1,d2=Math.floor(Math.random()*6)+1,sum=d1+d2;document.getElementById('dice-display').innerText=faces[d1-1]+' '+faces[d2-1];let win=false;if(diceBetType==='odd'&&sum%2===1)win=true;if(diceBetType==='even'&&sum%2===0)win=true;if(diceBetType==='over'&&sum>=8)win=true;if(diceBetType==='under'&&sum<=6)win=true;const re=document.getElementById('dice-result');let mult=2;if(diceBetType==='odd'||diceBetType==='even')mult=1.96;else if(diceBetType==='over')mult=2.3;else if(diceBetType==='under')mult=2.2;if(win){const pay=diffMult(Math.floor(amt*mult));cash+=pay;const profit=pay-amt;collectHouse(amt-pay,'주사위 · '+(currentUser||''));re.innerText='합 '+sum+' — 적중! +₩'+profit.toLocaleString()+' (×'+mult+')';re.style.color='#4ade80';}else{collectHouse(amt,'주사위 · '+(currentUser||''));re.innerText='합 '+sum+' — 실패';re.style.color='#ef4444';}checkBrokeReset();syncAllCashUI();await updateServerData(0);document.getElementById('dice-roll-btn').disabled=false;}
+async function rollDice(){if(!diceBetType){alert('배팅을 선택하세요');return;}let amt=selectedChip==='ALLIN'?Math.min(cash,getTierMaxBet(false)):selectedChip;if(selectedChip!=='ALLIN'&&amt<MIN_BET){alert('최소 배팅 ₩'+MIN_BET.toLocaleString());return;}if(amt>MAX_BET)amt=MAX_BET;if(cash<amt||amt<=0){alert('보유금 부족');return;}document.getElementById('dice-roll-btn').disabled=true;cash-=amt;syncAllCashUI();await updateServerData(amt);const faces=['⚀','⚁','⚂','⚃','⚄','⚅'];for(let i=0;i<10;i++){document.getElementById('dice-display').innerText=faces[Math.floor(Math.random()*6)]+' '+faces[Math.floor(Math.random()*6)];await delay(60);}const d1=Math.floor(Math.random()*6)+1,d2=Math.floor(Math.random()*6)+1,sum=d1+d2;document.getElementById('dice-display').innerText=faces[d1-1]+' '+faces[d2-1];let win=false;if(diceBetType==='odd'&&sum%2===1)win=true;if(diceBetType==='even'&&sum%2===0)win=true;if(diceBetType==='over'&&sum>=8)win=true;if(diceBetType==='under'&&sum<=6)win=true;const re=document.getElementById('dice-result');let mult=2;if(diceBetType==='odd'||diceBetType==='even')mult=1.96;else if(diceBetType==='over')mult=2.3;else if(diceBetType==='under')mult=2.2;if(win){const pay=diffPayout(amt, Math.floor(amt*mult));cash+=pay;const profit=pay-amt;collectHouse(amt-pay,'주사위 · '+(currentUser||''));re.innerText='합 '+sum+' — 적중! +₩'+profit.toLocaleString()+' (×'+mult+')';re.style.color='#4ade80';}else{collectHouse(amt,'주사위 · '+(currentUser||''));re.innerText='합 '+sum+' — 실패';re.style.color='#ef4444';}checkBrokeReset();syncAllCashUI();await updateServerData(0);document.getElementById('dice-roll-btn').disabled=false;}
 
 function showHelpFor(g){
   try{
@@ -2034,37 +2102,37 @@ async function adminBulkPay(){
 
 
 const TIER_TABLE=[
-  {min:2000000000,name:'챌린저',badge:'🏆',fee:0.008,attend:350000,maxBetMult:8,rollRatio:0.40,rank:31},
-  {min:1200000000,name:'그랜드마스터',badge:'⚜️',fee:0.01,attend:320000,maxBetMult:6,rollRatio:0.45,rank:30},
-  {min:700000000,name:'마스터',badge:'🔥',fee:0.012,attend:300000,maxBetMult:5,rollRatio:0.50,rank:29},
-  {min:450000000,name:'다이아1',badge:'💎',fee:0.015,attend:280000,maxBetMult:4,rollRatio:0.55,rank:28},
-  {min:320000000,name:'다이아2',badge:'💎',fee:0.018,attend:270000,maxBetMult:3.5,rollRatio:0.58,rank:27},
-  {min:220000000,name:'다이아3',badge:'💎',fee:0.02,attend:260000,maxBetMult:3.2,rollRatio:0.60,rank:26},
-  {min:150000000,name:'다이아4',badge:'💎',fee:0.022,attend:250000,maxBetMult:3,rollRatio:0.62,rank:25},
-  {min:100000000,name:'에메랄드1',badge:'💚',fee:0.025,attend:240000,maxBetMult:2.8,rollRatio:0.65,rank:24},
-  {min:75000000,name:'에메랄드2',badge:'💚',fee:0.028,attend:235000,maxBetMult:2.5,rollRatio:0.68,rank:23},
-  {min:55000000,name:'에메랄드3',badge:'💚',fee:0.03,attend:230000,maxBetMult:2.3,rollRatio:0.70,rank:22},
-  {min:40000000,name:'에메랄드4',badge:'💚',fee:0.032,attend:225000,maxBetMult:2.1,rollRatio:0.72,rank:21},
-  {min:28000000,name:'플래티넘1',badge:'💠',fee:0.035,attend:220000,maxBetMult:2,rollRatio:0.75,rank:20},
-  {min:20000000,name:'플래티넘2',badge:'💠',fee:0.038,attend:215000,maxBetMult:1.8,rollRatio:0.78,rank:19},
-  {min:14000000,name:'플래티넘3',badge:'💠',fee:0.04,attend:210000,maxBetMult:1.6,rollRatio:0.80,rank:18},
-  {min:10000000,name:'플래티넘4',badge:'💠',fee:0.042,attend:205000,maxBetMult:1.5,rollRatio:0.82,rank:17},
-  {min:7000000,name:'골드1',badge:'🥇',fee:0.045,attend:200000,maxBetMult:1.4,rollRatio:0.85,rank:16},
-  {min:5000000,name:'골드2',badge:'🥇',fee:0.048,attend:195000,maxBetMult:1.3,rollRatio:0.87,rank:15},
-  {min:3500000,name:'골드3',badge:'🥇',fee:0.05,attend:190000,maxBetMult:1.25,rollRatio:0.88,rank:14},
-  {min:2500000,name:'골드4',badge:'🥇',fee:0.05,attend:185000,maxBetMult:1.2,rollRatio:0.90,rank:13},
-  {min:1800000,name:'실버1',badge:'🥈',fee:0.052,attend:180000,maxBetMult:1.15,rollRatio:0.91,rank:12},
-  {min:1300000,name:'실버2',badge:'🥈',fee:0.053,attend:175000,maxBetMult:1.1,rollRatio:0.92,rank:11},
-  {min:900000,name:'실버3',badge:'🥈',fee:0.055,attend:170000,maxBetMult:1.08,rollRatio:0.93,rank:10},
-  {min:600000,name:'실버4',badge:'🥈',fee:0.055,attend:165000,maxBetMult:1.05,rollRatio:0.94,rank:9},
-  {min:400000,name:'브론즈1',badge:'🥉',fee:0.057,attend:160000,maxBetMult:1,rollRatio:0.95,rank:8},
-  {min:250000,name:'브론즈2',badge:'🥉',fee:0.058,attend:155000,maxBetMult:1,rollRatio:0.96,rank:7},
-  {min:150000,name:'브론즈3',badge:'🥉',fee:0.06,attend:150000,maxBetMult:1,rollRatio:0.97,rank:6},
-  {min:80000,name:'브론즈4',badge:'🥉',fee:0.06,attend:145000,maxBetMult:1,rollRatio:0.98,rank:5},
-  {min:40000,name:'아이언1',badge:'⚙️',fee:0.06,attend:140000,maxBetMult:1,rollRatio:0.99,rank:4},
-  {min:15000,name:'아이언2',badge:'⚙️',fee:0.06,attend:135000,maxBetMult:1,rollRatio:1.00,rank:3},
-  {min:5000,name:'아이언3',badge:'⚙️',fee:0.06,attend:130000,maxBetMult:1,rollRatio:1.00,rank:2},
-  {min:0,name:'아이언4',badge:'⚙️',fee:0.06,attend:120000,maxBetMult:1,rollRatio:1.00,rank:1}
+  {min:2000000000,name:'챌린저',badge:'🏆',fee:0.008,attend:122000,maxBetMult:8,rollRatio:0.40,rank:31},
+  {min:1200000000,name:'그랜드마스터',badge:'⚜️',fee:0.01,attend:112000,maxBetMult:6,rollRatio:0.45,rank:30},
+  {min:700000000,name:'마스터',badge:'🔥',fee:0.012,attend:105000,maxBetMult:5,rollRatio:0.50,rank:29},
+  {min:450000000,name:'다이아1',badge:'💎',fee:0.015,attend:98000,maxBetMult:4,rollRatio:0.55,rank:28},
+  {min:320000000,name:'다이아2',badge:'💎',fee:0.018,attend:94000,maxBetMult:3.5,rollRatio:0.58,rank:27},
+  {min:220000000,name:'다이아3',badge:'💎',fee:0.02,attend:91000,maxBetMult:3.2,rollRatio:0.60,rank:26},
+  {min:150000000,name:'다이아4',badge:'💎',fee:0.022,attend:88000,maxBetMult:3,rollRatio:0.62,rank:25},
+  {min:100000000,name:'에메랄드1',badge:'💚',fee:0.025,attend:84000,maxBetMult:2.8,rollRatio:0.65,rank:24},
+  {min:75000000,name:'에메랄드2',badge:'💚',fee:0.028,attend:82000,maxBetMult:2.5,rollRatio:0.68,rank:23},
+  {min:55000000,name:'에메랄드3',badge:'💚',fee:0.03,attend:80000,maxBetMult:2.3,rollRatio:0.70,rank:22},
+  {min:40000000,name:'에메랄드4',badge:'💚',fee:0.032,attend:79000,maxBetMult:2.1,rollRatio:0.72,rank:21},
+  {min:28000000,name:'플래티넘1',badge:'💠',fee:0.035,attend:77000,maxBetMult:2,rollRatio:0.75,rank:20},
+  {min:20000000,name:'플래티넘2',badge:'💠',fee:0.038,attend:75000,maxBetMult:1.8,rollRatio:0.78,rank:19},
+  {min:14000000,name:'플래티넘3',badge:'💠',fee:0.04,attend:74000,maxBetMult:1.6,rollRatio:0.80,rank:18},
+  {min:10000000,name:'플래티넘4',badge:'💠',fee:0.042,attend:72000,maxBetMult:1.5,rollRatio:0.82,rank:17},
+  {min:7000000,name:'골드1',badge:'🥇',fee:0.045,attend:70000,maxBetMult:1.4,rollRatio:0.85,rank:16},
+  {min:5000000,name:'골드2',badge:'🥇',fee:0.048,attend:68000,maxBetMult:1.3,rollRatio:0.87,rank:15},
+  {min:3500000,name:'골드3',badge:'🥇',fee:0.05,attend:66000,maxBetMult:1.25,rollRatio:0.88,rank:14},
+  {min:2500000,name:'골드4',badge:'🥇',fee:0.05,attend:65000,maxBetMult:1.2,rollRatio:0.90,rank:13},
+  {min:1800000,name:'실버1',badge:'🥈',fee:0.052,attend:63000,maxBetMult:1.15,rollRatio:0.91,rank:12},
+  {min:1300000,name:'실버2',badge:'🥈',fee:0.053,attend:61000,maxBetMult:1.1,rollRatio:0.92,rank:11},
+  {min:900000,name:'실버3',badge:'🥈',fee:0.055,attend:59000,maxBetMult:1.08,rollRatio:0.93,rank:10},
+  {min:600000,name:'실버4',badge:'🥈',fee:0.055,attend:58000,maxBetMult:1.05,rollRatio:0.94,rank:9},
+  {min:400000,name:'브론즈1',badge:'🥉',fee:0.057,attend:56000,maxBetMult:1,rollRatio:0.95,rank:8},
+  {min:250000,name:'브론즈2',badge:'🥉',fee:0.058,attend:54000,maxBetMult:1,rollRatio:0.96,rank:7},
+  {min:150000,name:'브론즈3',badge:'🥉',fee:0.06,attend:52000,maxBetMult:1,rollRatio:0.97,rank:6},
+  {min:80000,name:'브론즈4',badge:'🥉',fee:0.06,attend:51000,maxBetMult:1,rollRatio:0.98,rank:5},
+  {min:40000,name:'아이언1',badge:'⚙️',fee:0.06,attend:49000,maxBetMult:1,rollRatio:0.99,rank:4},
+  {min:15000,name:'아이언2',badge:'⚙️',fee:0.06,attend:47000,maxBetMult:1,rollRatio:1.00,rank:3},
+  {min:5000,name:'아이언3',badge:'⚙️',fee:0.06,attend:46000,maxBetMult:1,rollRatio:1.00,rank:2},
+  {min:0,name:'아이언4',badge:'⚙️',fee:0.06,attend:42000,maxBetMult:1,rollRatio:1.00,rank:1}
 ];
 function getTierInfo(rolling){
   rolling=Math.floor(rolling||0);
@@ -2223,12 +2291,23 @@ async function adminRenameUser(username){
 }
 
 
-let difficulty={mode:'normal',label:'보통',rtp:0.97,mult:0.97};
+let difficulty={mode:'normal',label:'보통',rtp:0.96,mult:0.96};
 function diffMult(x){
+  // 하위 호환: 순수 금액에 mult (가능하면 diffPayout 사용)
   const m=Number(difficulty.mult)||1;
   x=Math.floor(Number(x)||0);
   if(x<=0)return 0;
   return Math.floor(x*m);
+}
+/** 원금(stake) + 이익에만 난이도 적용. 무승부 환불은 100% 보장 */
+function diffPayout(stake, grossPay){
+  stake=Math.floor(Number(stake)||0);
+  grossPay=Math.floor(Number(grossPay)||0);
+  if(grossPay<=0) return 0;
+  if(grossPay<=stake) return grossPay; // 환불/부분환불은 mult 미적용
+  const m=Number(difficulty.mult)||1;
+  const profit=grossPay-stake;
+  return Math.floor(stake + profit*m);
 }
 function diffOdd(odd){
   const m=Number(difficulty.mult)||1;
@@ -2828,7 +2907,7 @@ async function dropPlinko(){
   const r=Math.random();
   if(r<0.35)idx=Math.min(PLINKO_MULTS.length-1,Math.max(0,Math.floor(PLINKO_MULTS.length/2)+(Math.random()<0.5?-1:1)));
   const mult=PLINKO_MULTS[idx];
-  let pay=diffMult(Math.floor(amt*mult));
+  let pay=diffPayout(amt, Math.floor(amt*mult));
   cash+=pay;const profit=pay-amt;
   if(profit>=0)reportMission('win_any'); else reportLoss(-profit);
   collectHouse(amt-pay,'플링코 · '+(currentUser||''));
@@ -2865,7 +2944,7 @@ async function dealPoker(){
   document.getElementById('poker-player').innerText=p.t;
   document.getElementById('poker-dealer').innerText=d.t;
   let pay=0,msg='';
-  if(p.v>d.v){pay=diffMult(amt*2);msg='승리!';reportMission('win_any');}
+  if(p.v>d.v){pay=diffPayout(amt, amt*2);msg='승리!';reportMission('win_any');}
   else if(p.v===d.v){pay=amt;msg='무승부';}
   else {pay=0;msg='패배';reportLoss(amt);}
   cash+=pay;collectHouse(amt-pay,'원카드포커 · '+(currentUser||''));
