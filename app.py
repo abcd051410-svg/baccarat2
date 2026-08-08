@@ -13,31 +13,34 @@ CURRENT_NOTICE = {"id": "", "message": "", "created_at": 0}
 
 # 롤링 티어 (누적 total_rolling 기준, 하락 없음)
 TIER_TABLE = [
-    # min_rolling, name, badge, transfer_fee_rate, attend_reward
-    (300_000_000, "마스터", "🔥", 0.01, 300000),
-    (100_000_000, "다이아", "👑", 0.02, 280000),
-    (50_000_000, "플래티넘", "💎", 0.03, 250000),
-    (20_000_000, "골드", "🥇", 0.04, 230000),
-    (5_000_000, "실버", "🥈", 0.045, 210000),
-    (0, "브론즈", "🥉", 0.05, 200000),
+    # min_rolling, name, badge, fee_rate, attend, max_bet_mult, roll_ratio
+    # roll_ratio: 마감에 필요한 롤링 = 출금액 * ratio (낮을수록 유리)
+    (300_000_000, "마스터", "🔥", 0.01, 300000, 5.0, 0.50),
+    (100_000_000, "다이아", "👑", 0.02, 280000, 3.0, 0.60),
+    (50_000_000, "플래티넘", "💎", 0.03, 250000, 2.0, 0.70),
+    (20_000_000, "골드", "🥇", 0.04, 230000, 1.5, 0.80),
+    (5_000_000, "실버", "🥈", 0.045, 210000, 1.2, 0.90),
+    (0, "브론즈", "🥉", 0.05, 200000, 1.0, 1.00),
 ]
 
 
 def get_tier(rolling):
     rolling = int(rolling or 0)
-    for i, (mn, name, badge, fee, attend) in enumerate(TIER_TABLE):
+    for i, row in enumerate(TIER_TABLE):
+        mn, name, badge, fee, attend, mult, ratio = row
         if rolling >= mn:
-            # next tier
             if i == 0:
                 next_name, next_need = None, 0
             else:
-                nmin, nname, _, _, _ = TIER_TABLE[i - 1]
+                nmin, nname = TIER_TABLE[i - 1][0], TIER_TABLE[i - 1][1]
                 next_name, next_need = nname, max(0, nmin - rolling)
             return {
                 "name": name,
                 "badge": badge,
                 "fee_rate": fee,
                 "attend_reward": attend,
+                "max_bet_mult": mult,
+                "roll_ratio": ratio,
                 "min_rolling": mn,
                 "rolling": rolling,
                 "next_name": next_name,
@@ -128,6 +131,7 @@ def init_db():
             ("display_name", "VARCHAR(50) DEFAULT ''"),
             ("total_profit", "BIGINT DEFAULT 0"),
             ("last_seen", "DOUBLE PRECISION DEFAULT 0"),
+            ("suspended", "BOOLEAN DEFAULT FALSE"),
         ]:
             try:
                 cursor.execute(f"ALTER TABLE users ADD COLUMN IF NOT EXISTS {col} {typedef}")
@@ -238,7 +242,8 @@ def login():
             """
             SELECT password, cash, game_cash, total_rolling, initial_withdraw,
                    current_rolling, profit_rate, last_attendance,
-                   COALESCE(display_name, ''), COALESCE(total_profit, 0)
+                   COALESCE(display_name, ''), COALESCE(total_profit, 0),
+                   COALESCE(suspended, FALSE)
             FROM users WHERE username = %s
             """,
             (username,),
@@ -260,6 +265,7 @@ def login():
             last_attendance,
             display_name,
             total_profit,
+            suspended,
         ) = row
 
         if db_password != password:
@@ -282,6 +288,7 @@ def login():
             "last_attendance": last_attendance,
             "total_profit": total_profit,
             "tier": get_tier(total_rolling),
+            "suspended": bool(suspended),
         })
     except Exception as e:
         print(f"Login error: {e}")
@@ -350,13 +357,32 @@ def admin_get_users():
 
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("""
-            SELECT username, cash, game_cash, total_rolling, initial_withdraw,
-                   current_rolling, profit_rate,
-                   COALESCE(display_name, ''), COALESCE(total_profit, 0),
-                   COALESCE(last_seen, 0)
-            FROM users
-        """)
+        try:
+            cursor.execute(
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS suspended BOOLEAN DEFAULT FALSE"
+            )
+            conn.commit()
+        except Exception:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        try:
+            cursor.execute("""
+                SELECT username, cash, game_cash, total_rolling, initial_withdraw,
+                       current_rolling, profit_rate,
+                       COALESCE(display_name, ''), COALESCE(total_profit, 0),
+                       COALESCE(last_seen, 0), COALESCE(suspended, FALSE)
+                FROM users
+            """)
+        except Exception:
+            cursor.execute("""
+                SELECT username, cash, game_cash, total_rolling, initial_withdraw,
+                       current_rolling, profit_rate,
+                       COALESCE(display_name, ''), COALESCE(total_profit, 0),
+                       COALESCE(last_seen, 0), FALSE
+                FROM users
+            """)
         rows = cursor.fetchall()
         cursor.close()
         conn.close()
@@ -378,6 +404,7 @@ def admin_get_users():
                 "last_seen": ls,
                 "online": (now - ls) < 90 if ls else False,
                 "tier": get_tier(r[3] if len(r) > 3 else 0),
+                "suspended": bool(r[10]) if len(r) > 10 else False,
             })
         return jsonify(users)
     except Exception as e:
@@ -988,6 +1015,101 @@ def admin_bulk_pay():
         return jsonify({"success": True, "count": count, "amount": amount})
     except Exception as e:
         print(f"Bulk pay error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+
+@app.route("/api/admin/suspend", methods=["POST"])
+def admin_suspend():
+    """계정 일시정지 / 해제"""
+    try:
+        data = request.json or {}
+        if data.get("pw") != "abcd051410" and data.get("admin_user") != "abcd051410":
+            return jsonify({"error": "Unauthorized"}), 401
+        username = (data.get("username") or "").strip()
+        suspend = bool(data.get("suspend", True))
+        if not username:
+            return jsonify({"error": "username required"}), 400
+        if username == "abcd051410":
+            return jsonify({"error": "관리자 계정은 정지할 수 없습니다."}), 400
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        # suspended 컬럼 없으면 생성 (기존 DB 호환)
+        try:
+            cursor.execute(
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS suspended BOOLEAN DEFAULT FALSE"
+            )
+            conn.commit()
+        except Exception:
+            try:
+                cursor.execute(
+                    "ALTER TABLE users ADD COLUMN suspended BOOLEAN DEFAULT FALSE"
+                )
+                conn.commit()
+            except Exception as col_e:
+                # 이미 있으면 무시
+                conn.rollback()
+                print(f"suspend col ensure: {col_e}")
+        cursor.execute(
+            "UPDATE users SET suspended = %s WHERE username = %s",
+            (suspend, username),
+        )
+        if cursor.rowcount == 0:
+            cursor.close(); conn.close()
+            return jsonify({"error": "유저 없음"}), 400
+        conn.commit()
+        cursor.close(); conn.close()
+        return jsonify({"success": True, "username": username, "suspended": suspend})
+    except Exception as e:
+        print(f"Suspend error: {e}")
+        return jsonify({"error": f"일시정지 처리 실패: {str(e)}"}), 500
+
+
+@app.route("/api/change_name", methods=["POST"])
+def change_name():
+    """이름 변경 — 일시정지 계정도 해제됨"""
+    try:
+        data = request.json or {}
+        username = (data.get("username") or "").strip()
+        password = (data.get("password") or "").strip()
+        new_name = (data.get("display_name") or data.get("name") or "").strip()
+        if not username or not password:
+            return jsonify({"error": "아이디와 비밀번호를 입력해주세요."}), 400
+        if not new_name or len(new_name) < 1:
+            return jsonify({"error": "이름을 입력해주세요."}), 400
+        if len(new_name) > 20:
+            return jsonify({"error": "이름은 20자 이내로 입력해주세요."}), 400
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT password, COALESCE(display_name, '') FROM users WHERE username = %s",
+            (username,),
+        )
+        row = cursor.fetchone()
+        if not row:
+            cursor.close(); conn.close()
+            return jsonify({"error": "계정을 찾을 수 없습니다."}), 400
+        if row[0] != password:
+            cursor.close(); conn.close()
+            return jsonify({"error": "비밀번호가 일치하지 않습니다."}), 400
+        old_name = row[1] or ""
+        if new_name == old_name:
+            cursor.close(); conn.close()
+            return jsonify({"error": "기존과 다른 이름을 입력해주세요."}), 400
+        cursor.execute(
+            "UPDATE users SET display_name = %s, suspended = FALSE WHERE username = %s",
+            (new_name, username),
+        )
+        conn.commit()
+        cursor.close(); conn.close()
+        return jsonify({
+            "success": True,
+            "display_name": new_name,
+            "suspended": False,
+            "message": "이름이 변경되었습니다. 이용이 다시 가능합니다.",
+        })
+    except Exception as e:
+        print(f"Change name error: {e}")
         return jsonify({"error": str(e)}), 500
 
 
