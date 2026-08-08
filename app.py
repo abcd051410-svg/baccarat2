@@ -3,10 +3,13 @@ import time
 import random
 from datetime import datetime, timezone, timedelta
 import psycopg2
+from psycopg2 import pool as pg_pool
 from flask import Flask, jsonify, render_template, request
 
 app = Flask(__name__)
+app.config["JSON_SORT_KEYS"] = False
 DATABASE_URL = os.environ.get("DATABASE_URL")
+_db_pool = None
 
 # 공지 (메모리 저장 — 서버 재시작 시 초기화)
 # 영구 저장이 필요하면 notices 테이블로 분리 가능
@@ -99,10 +102,43 @@ def ensure_user_columns(cursor, conn=None):
                 pass
 
 
-def get_db_connection():
+def _ensure_pool():
+    global _db_pool
+    if _db_pool is not None:
+        return
     if not DATABASE_URL:
         raise ValueError("DATABASE_URL 환경 변수가 설정되지 않았습니다!")
-    return psycopg2.connect(DATABASE_URL)
+    # 연결 재사용으로 렉/핸드셰이크 감소
+    _db_pool = pg_pool.ThreadedConnectionPool(
+        minconn=1,
+        maxconn=12,
+        dsn=DATABASE_URL,
+    )
+
+
+def get_db_connection():
+    _ensure_pool()
+    return _db_pool.getconn()
+
+
+def release_db(conn):
+    """커넥션을 풀에 반환 (close 대신 사용)"""
+    global _db_pool
+    if conn is None:
+        return
+    try:
+        if _db_pool is not None:
+            _db_pool.putconn(conn)
+        else:
+            try:
+                conn.close()
+            except Exception:
+                pass
+    except Exception:
+        try:
+            conn.close()
+        except Exception:
+            pass
 
 
 
@@ -133,7 +169,7 @@ def resolve_username(identifier, conn=None):
     row = cursor.fetchone()
     if row:
         if own_conn:
-            cursor.close(); conn.close()
+            cursor.close(); release_db(conn)
         return row[0], None
     cursor.execute(
         "SELECT username FROM users WHERE display_name = %s OR display_name = %s",
@@ -141,7 +177,7 @@ def resolve_username(identifier, conn=None):
     )
     rows = cursor.fetchall()
     if own_conn:
-        cursor.close(); conn.close()
+        cursor.close(); release_db(conn)
     if len(rows) == 1:
         return rows[0][0], None
     if len(rows) > 1:
@@ -222,7 +258,7 @@ def init_db():
 
         conn.commit()
         cursor.close()
-        conn.close()
+        release_db(conn)
         ensure_user_columns(cursor, conn)
         print("Database initialized successfully!")
     except Exception as e:
@@ -486,7 +522,7 @@ def register():
         cursor.execute("SELECT username FROM users WHERE username = %s", (username,))
         if cursor.fetchone():
             cursor.close()
-            conn.close()
+            release_db(conn)
             return jsonify({"error": "이미 존재하는 아이디입니다."}), 400
 
         cursor.execute(
@@ -502,7 +538,7 @@ def register():
         )
         conn.commit()
         cursor.close()
-        conn.close()
+        release_db(conn)
         return jsonify({"success": True, "message": "회원가입이 완료되었습니다."})
     except Exception as e:
         print(f"Register error: {e}")
@@ -555,7 +591,7 @@ def login():
 
         if not row:
             cursor.close()
-            conn.close()
+            release_db(conn)
             return jsonify({"error": "존재하지 않는 아이디입니다."}), 400
 
         vals = list(row) + [None] * 11
@@ -573,11 +609,11 @@ def login():
 
         if db_password != password:
             cursor.close()
-            conn.close()
+            release_db(conn)
             return jsonify({"error": "비밀번호가 일치하지 않습니다."}), 400
 
         cursor.close()
-        conn.close()
+        release_db(conn)
         return jsonify({
             "username": username,
             "display_name": display_name or username,
@@ -635,12 +671,51 @@ def update_user():
         except (TypeError, ValueError):
             game_cash = None
         if not username:
+            release_db(conn)
             return jsonify({"error": "username required"}), 400
+
+        cursor.execute(
+            "SELECT COALESCE(cash, 0), COALESCE(game_cash, 0) FROM users WHERE username = %s",
+            (username,),
+        )
+        row = cursor.fetchone()
+        if not row:
+            cursor.close()
+            release_db(conn)
+            return jsonify({"error": "유저 없음"}), 400
+        db_cash = int(row[0] or 0)
+        db_game = int(row[1] or 0)
+
+        # 은행 잔고(cash) 보호:
+        # 송금 입금/관리자 지급 후, 구버전 클라이언트가 예전 잔액으로 덮어쓰는 것 방지
+        # 허용: 출금(은행↓ 보유↑), 마감(은행↑ 보유↓), 동일
+        final_cash = db_cash
+        final_game = db_game if game_cash is None else int(game_cash)
+
+        if cash is not None:
+            c = int(cash)
+            g = final_game
+            bank_delta = c - db_cash
+            game_delta = g - db_game
+            if bank_delta == 0:
+                final_cash = db_cash
+            elif bank_delta < 0 and game_delta >= (-bank_delta) - 1:
+                # 은행 → 보유 출금
+                final_cash = c
+            elif bank_delta > 0 and game_delta <= (-bank_delta) + 1:
+                # 보유 → 은행 마감
+                final_cash = c
+            else:
+                # 클라이언트가 은행만 낮추려 함(송금 입금 덮어쓰기 등) → 은행 유지
+                final_cash = db_cash
+                # 보유금은 클라이언트 값 반영(게임 중)
+                final_game = g
+
         cursor.execute(
             """
             UPDATE users
-            SET cash = COALESCE(%s, cash),
-                game_cash = COALESCE(%s, game_cash),
+            SET cash = %s,
+                game_cash = %s,
                 total_rolling = total_rolling + %s,
                 initial_withdraw = COALESCE(%s, initial_withdraw),
                 current_rolling = COALESCE(%s, current_rolling),
@@ -651,8 +726,8 @@ def update_user():
             WHERE username = %s
             """,
             (
-                cash,
-                game_cash,
+                final_cash,
+                final_game,
                 rolling_add,
                 initial_withdraw,
                 current_rolling,
@@ -665,8 +740,12 @@ def update_user():
         )
         conn.commit()
         cursor.close()
-        conn.close()
-        return jsonify({"success": True})
+        release_db(conn)
+        return jsonify({
+            "success": True,
+            "cash": final_cash,
+            "game_cash": final_game,
+        })
     except Exception as e:
         print(f"Update error: {e}")
         return jsonify({"error": f"서버 통신 오류: {str(e)}"}), 500
@@ -709,7 +788,7 @@ def admin_get_users():
             """)
         rows = cursor.fetchall()
         cursor.close()
-        conn.close()
+        release_db(conn)
         now = time.time()
         users = []
         for r in rows:
@@ -787,7 +866,7 @@ def admin_edit_user():
         )
         row = cursor.fetchone()
         cursor.close()
-        conn.close()
+        release_db(conn)
         return jsonify({
             "success": True,
             "cash": row[0] if row else 0,
@@ -812,7 +891,7 @@ def admin_delete_user():
         cursor.execute("DELETE FROM users WHERE username = %s", (username,))
         conn.commit()
         cursor.close()
-        conn.close()
+        release_db(conn)
         return jsonify({"success": True})
     except Exception as e:
         print(f"Admin delete error: {e}")
@@ -874,14 +953,14 @@ def delete_account():
         cursor.execute("SELECT password FROM users WHERE username = %s", (username,))
         row = cursor.fetchone()
         if not row:
-            cursor.close(); conn.close()
+            cursor.close(); release_db(conn)
             return jsonify({"error": "존재하지 않는 계정입니다."}), 400
         if row[0] != password:
-            cursor.close(); conn.close()
+            cursor.close(); release_db(conn)
             return jsonify({"error": "비밀번호가 일치하지 않습니다."}), 400
         cursor.execute("DELETE FROM users WHERE username = %s", (username,))
         conn.commit()
-        cursor.close(); conn.close()
+        cursor.close(); release_db(conn)
         return jsonify({"success": True})
     except Exception as e:
         print(f"Delete account error: {e}")
@@ -899,7 +978,7 @@ def admin_reset_ranking():
         cursor = conn.cursor()
         cursor.execute("UPDATE users SET total_profit = 0, total_rolling = 0")
         conn.commit()
-        cursor.close(); conn.close()
+        cursor.close(); release_db(conn)
         return jsonify({"success": True})
     except Exception as e:
         print(f"Reset ranking error: {e}")
@@ -936,15 +1015,16 @@ def transfer_money():
             """
             SELECT password, COALESCE(cash, 0), COALESCE(game_cash, 0), COALESCE(total_rolling, 0)
             FROM users WHERE username = %s
+            FOR UPDATE
             """,
             (from_user,),
         )
         row = cursor.fetchone()
         if not row:
-            cursor.close(); conn.close()
+            cursor.close(); release_db(conn)
             return jsonify({"error": "보내는 계정이 없습니다."}), 400
         if row[0] != password:
-            cursor.close(); conn.close()
+            cursor.close(); release_db(conn)
             return jsonify({"error": "비밀번호가 일치하지 않습니다."}), 400
         from_bank = int(row[1] or 0)
         from_game = int(row[2] or 0)
@@ -953,7 +1033,7 @@ def transfer_money():
         total_need = amount + fee
         total_avail = from_bank + from_game
         if total_avail < total_need:
-            cursor.close(); conn.close()
+            cursor.close(); release_db(conn)
             return jsonify({
                 "error": (
                     f"잔고 부족 (필요 ₩{total_need:,} = 송금 ₩{amount:,} + 수수료 ₩{fee:,} / "
@@ -981,10 +1061,10 @@ def transfer_money():
             if len(matches) == 1:
                 to_user = matches[0][0]
             elif len(matches) > 1:
-                cursor.close(); conn.close()
+                cursor.close(); release_db(conn)
                 return jsonify({"error": "같은 이름이 여러 명입니다. 아이디로 송금해주세요."}), 400
             else:
-                cursor.close(); conn.close()
+                cursor.close(); release_db(conn)
                 return jsonify({"error": "받는 사람(아이디/이름)을 찾을 수 없습니다."}), 400
 
         # 은행 잔고 우선 차감, 부족분은 게임 보유금에서
@@ -994,6 +1074,11 @@ def transfer_money():
             "UPDATE users SET cash = cash - %s, game_cash = game_cash - %s WHERE username = %s",
             (take_bank, take_game, from_user),
         )
+        cursor.execute(
+            "SELECT COALESCE(cash, 0) FROM users WHERE username = %s FOR UPDATE",
+            (to_user,),
+        )
+        cursor.fetchone()
         cursor.execute(
             "UPDATE users SET cash = cash + %s WHERE username = %s",
             (amount, to_user),
@@ -1021,7 +1106,7 @@ def transfer_money():
         conn.commit()
         cursor.execute("SELECT cash, game_cash FROM users WHERE username = %s", (from_user,))
         me = cursor.fetchone()
-        cursor.close(); conn.close()
+        cursor.close(); release_db(conn)
         return jsonify({
             "success": True,
             "cash": me[0] if me else 0,
@@ -1055,7 +1140,7 @@ def house_collect():
         cursor.execute("SELECT cash FROM users WHERE username = %s", (ADMIN,))
         row = cursor.fetchone()
         if not row:
-            cursor.close(); conn.close()
+            cursor.close(); release_db(conn)
             return jsonify({"error": "admin not found"}), 400
         prev = int(row[0] or 0)
         new_cash = prev + amount
@@ -1073,7 +1158,7 @@ def house_collect():
             note = (memo + " · 유저 당첨→하우 지출") if memo else "유저 당첨 지급"
         log_transaction(cursor, ADMIN, kind, amount, new_cash, note)
         conn.commit()
-        cursor.close(); conn.close()
+        cursor.close(); release_db(conn)
         return jsonify({"success": True, "amount": amount, "admin_cash": new_cash})
     except Exception as e:
         print(f"House collect error: {e}")
@@ -1105,10 +1190,10 @@ def messages_send():
             if len(matches) == 1:
                 to_user = matches[0][0]
             elif len(matches) > 1:
-                cursor.close(); conn.close()
+                cursor.close(); release_db(conn)
                 return jsonify({"error": "같은 이름이 여러 명입니다. 아이디로 보내주세요."}), 400
             else:
-                cursor.close(); conn.close()
+                cursor.close(); release_db(conn)
                 return jsonify({"error": "받는 사람(아이디/이름)을 찾을 수 없습니다."}), 400
         cursor.execute(
             "INSERT INTO messages (from_user, to_user, body) VALUES (%s, %s, %s) RETURNING id, created_at",
@@ -1116,7 +1201,7 @@ def messages_send():
         )
         row = cursor.fetchone()
         conn.commit()
-        cursor.close(); conn.close()
+        cursor.close(); release_db(conn)
         return jsonify({
             "success": True,
             "id": row[0],
@@ -1174,7 +1259,7 @@ def messages_inbox():
             (username,),
         )
         total_unread = cursor.fetchone()[0] or 0
-        cursor.close(); conn.close()
+        cursor.close(); release_db(conn)
         return jsonify({"peers": peers, "total_unread": int(total_unread)})
     except Exception as e:
         print(f"Inbox error: {e}")
@@ -1221,7 +1306,7 @@ def messages_thread():
             }
             for r in rows
         ]
-        cursor.close(); conn.close()
+        cursor.close(); release_db(conn)
         return jsonify({"messages": msgs})
     except Exception as e:
         print(f"Thread error: {e}")
@@ -1255,7 +1340,7 @@ def get_transactions():
             (username, limit),
         )
         rows = cursor.fetchall()
-        cursor.close(); conn.close()
+        cursor.close(); release_db(conn)
         items = [
             {
                 "id": r[0],
@@ -1295,14 +1380,14 @@ def attendance_check():
         )
         row = cursor.fetchone()
         if not row:
-            cursor.close(); conn.close()
+            cursor.close(); release_db(conn)
             return jsonify({"error": "계정을 찾을 수 없습니다."}), 400
 
         cash, last, rolling = int(row[0] or 0), (row[1] or ""), int(row[2] or 0)
         tier = get_tier(rolling)
         reward = int(tier["attend_reward"])
         if last == today:
-            cursor.close(); conn.close()
+            cursor.close(); release_db(conn)
             return jsonify({"error": "오늘은 이미 출석했습니다.", "already": True, "last_attendance": last, "tier": tier}), 400
 
         new_cash = cash + reward
@@ -1312,7 +1397,7 @@ def attendance_check():
         )
         log_transaction(cursor, username, "출석보상", reward, new_cash, f"{today} 출석체크")
         conn.commit()
-        cursor.close(); conn.close()
+        cursor.close(); release_db(conn)
         return jsonify({
             "success": True,
             "reward": reward,
@@ -1358,7 +1443,7 @@ def admin_bulk_pay():
             )
             count += 1
         conn.commit()
-        cursor.close(); conn.close()
+        cursor.close(); release_db(conn)
         return jsonify({"success": True, "count": count, "amount": amount})
     except Exception as e:
         print(f"Bulk pay error: {e}")
@@ -1435,10 +1520,10 @@ def admin_rename():
             (new_name, username),
         )
         if cursor.rowcount == 0:
-            cursor.close(); conn.close()
+            cursor.close(); release_db(conn)
             return jsonify({"error": "유저 없음"}), 400
         conn.commit()
-        cursor.close(); conn.close()
+        cursor.close(); release_db(conn)
         return jsonify({"success": True, "username": username, "display_name": new_name})
     except Exception as e:
         print(f"Admin rename error: {e}")
@@ -1481,10 +1566,10 @@ def admin_suspend():
             (suspend, username),
         )
         if cursor.rowcount == 0:
-            cursor.close(); conn.close()
+            cursor.close(); release_db(conn)
             return jsonify({"error": "유저 없음"}), 400
         conn.commit()
-        cursor.close(); conn.close()
+        cursor.close(); release_db(conn)
         return jsonify({"success": True, "username": username, "suspended": suspend})
     except Exception as e:
         print(f"Suspend error: {e}")
@@ -1513,21 +1598,21 @@ def change_name():
         )
         row = cursor.fetchone()
         if not row:
-            cursor.close(); conn.close()
+            cursor.close(); release_db(conn)
             return jsonify({"error": "계정을 찾을 수 없습니다."}), 400
         if row[0] != password:
-            cursor.close(); conn.close()
+            cursor.close(); release_db(conn)
             return jsonify({"error": "비밀번호가 일치하지 않습니다."}), 400
         old_name = row[1] or ""
         if new_name == old_name:
-            cursor.close(); conn.close()
+            cursor.close(); release_db(conn)
             return jsonify({"error": "기존과 다른 이름을 입력해주세요."}), 400
         cursor.execute(
             "UPDATE users SET display_name = %s, suspended = FALSE WHERE username = %s",
             (new_name, username),
         )
         conn.commit()
-        cursor.close(); conn.close()
+        cursor.close(); release_db(conn)
         return jsonify({
             "success": True,
             "display_name": new_name,
@@ -1553,7 +1638,7 @@ def heartbeat():
             (time.time(), username),
         )
         conn.commit()
-        cursor.close(); conn.close()
+        cursor.close(); release_db(conn)
         return jsonify({"success": True})
     except Exception as e:
         print(f"Heartbeat error: {e}")
@@ -1573,7 +1658,7 @@ def messages_unread():
             (username,),
         )
         count = cursor.fetchone()[0] or 0
-        cursor.close(); conn.close()
+        cursor.close(); release_db(conn)
         return jsonify({"count": int(count)})
     except Exception as e:
         return jsonify({"count": 0})
@@ -1581,4 +1666,4 @@ def messages_unread():
 
 if __name__ == "__main__":
     init_db()
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=False, threaded=True)
