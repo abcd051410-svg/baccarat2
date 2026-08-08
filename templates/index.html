@@ -683,8 +683,17 @@ async function updateServerData(rollingAdd=0){
   _updateInFlight=true;
   try{
     const res=await fetch('/api/update',{method:'POST',headers:{'Content-Type':'application/json'},body:payload});
-    if(res.ok) _lastUpdatePayload=payload;
-    else console.warn('update failed',res.status);
+    if(res.ok){
+      _lastUpdatePayload=payload;
+      try{
+        const d=await res.json();
+        // 서버가 은행 잔고를 보호한 경우 클라이언트 동기화
+        if(d && d.cash!=null && Math.floor(d.cash)!==Math.floor(serverCash||0)){
+          serverCash=Math.floor(d.cash);
+          try{syncAllCashUI();updateUIValues();}catch(e){}
+        }
+      }catch(e){}
+    } else console.warn('update failed',res.status);
   }catch(e){console.warn('update error',e);}
   _updateInFlight=false;
   if(_updateQueued){
