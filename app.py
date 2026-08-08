@@ -1,5 +1,6 @@
 import os
 import time
+import random
 from datetime import datetime, timezone, timedelta
 import psycopg2
 from flask import Flask, jsonify, render_template, request
@@ -10,6 +11,23 @@ DATABASE_URL = os.environ.get("DATABASE_URL")
 # 공지 (메모리 저장 — 서버 재시작 시 초기화)
 # 영구 저장이 필요하면 notices 테이블로 분리 가능
 CURRENT_NOTICE = {"id": "", "message": "", "created_at": 0}
+
+# 전역 난이도 (서버 메모리 — 재시작 시 normal)
+# easy 106% / normal 96% / hard 86%  (기준 normal=1.0)
+DIFFICULTY_CONFIG = {
+    "mode": "normal",
+    "label": "보통",
+    "rtp": 0.96,
+    "mult": 1.0,  # 배당에 곱하는 계수 (normal 대비)
+}
+DIFFICULTY_PRESETS = {
+    "easy": {"mode": "easy", "label": "쉬움", "rtp": 1.06, "mult": 1.06 / 0.96},
+    "normal": {"mode": "normal", "label": "보통", "rtp": 0.96, "mult": 1.0},
+    "hard": {"mode": "hard", "label": "어려움", "rtp": 0.86, "mult": 0.86 / 0.96},
+}
+
+
+
 
 # 롤링 티어 (누적 total_rolling 기준, 하락 없음)
 TIER_TABLE = [
@@ -179,6 +197,177 @@ def init_db():
         print("Database initialized successfully!")
     except Exception as e:
         print(f"Database initialization error details: {e}")
+
+
+
+# ===== 공유 테이블 (폴링용, 메모리) =====
+_TABLE_LOCK_NOTE = "single-process memory; fine for one Flask worker"
+
+
+def _new_deck():
+    suits = ["♠", "♥", "♦", "♣"]
+    ranks = [
+        ("A", 1), ("2", 2), ("3", 3), ("4", 4), ("5", 5), ("6", 6),
+        ("7", 7), ("8", 8), ("9", 9), ("10", 0), ("J", 0), ("Q", 0), ("K", 0),
+    ]
+    d = [{"suit": s, "name": n, "val": v} for s in suits for n, v in ranks for _ in range(8)]
+    random.shuffle(d)
+    return d
+
+
+def _score(hand):
+    return sum(c["val"] for c in hand) % 10
+
+
+def _gen_baccarat_round():
+    deck = _new_deck()
+    p = [deck.pop(), deck.pop()]
+    b = [deck.pop(), deck.pop()]
+    ps, bs = _score(p), _score(b)
+    p3 = None
+    # player third
+    if ps <= 5:
+        p3 = deck.pop()
+        p.append(p3)
+        ps = _score(p)
+    # banker third (standard baccarat)
+    def banker_draws():
+        if p3 is None:
+            return bs <= 5
+        pv = p3["val"]
+        if bs <= 2:
+            return True
+        if bs == 3:
+            return pv != 8
+        if bs == 4:
+            return pv in (2, 3, 4, 5, 6, 7)
+        if bs == 5:
+            return pv in (4, 5, 6, 7)
+        if bs == 6:
+            return pv in (6, 7)
+        return False
+    if banker_draws():
+        b.append(deck.pop())
+        bs = _score(b)
+    if ps > bs:
+        result = "PLAYER"
+    elif bs > ps:
+        result = "BANKER"
+    else:
+        result = "TIE"
+    return {
+        "player": p,
+        "banker": b,
+        "pScore": ps,
+        "bScore": bs,
+        "result": result,
+    }
+
+
+def _gen_dt_round():
+    # val for DT comparison: A=1..10=10,J=11,Q=12,K=13
+    rank_map = {"A": 1, "2": 2, "3": 3, "4": 4, "5": 5, "6": 6, "7": 7, "8": 8, "9": 9, "10": 10, "J": 11, "Q": 12, "K": 13}
+    suits = ["♠", "♥", "♦", "♣"]
+    names = list(rank_map.keys())
+    def card():
+        n = random.choice(names)
+        return {"suit": random.choice(suits), "name": n, "val": rank_map[n]}
+    d, t = card(), card()
+    if d["val"] > t["val"]:
+        result = "DRAGON"
+    elif t["val"] > d["val"]:
+        result = "TIGER"
+    else:
+        result = "TIE"
+    # multi 2/3/5/8 weighted
+    r = random.random()
+    if r < 0.45:
+        multi = 2
+    elif r < 0.75:
+        multi = 3
+    elif r < 0.92:
+        multi = 5
+    else:
+        multi = 8
+    suit_names = ["스페이드", "하트", "다이아", "클로버"]
+    suit_syms = {"스페이드": "♠", "하트": "♥", "다이아": "♦", "클로버": "♣"}
+    sn = random.choice(suit_names)
+    return {
+        "dragon": d,
+        "tiger": t,
+        "result": result,
+        "multi": multi,
+        "suit_name": sn,
+        "suit_sym": suit_syms[sn],
+    }
+
+
+TABLES = {
+    "baccarat": {
+        "round_id": 1,
+        "phase": "betting",
+        "phase_end": 0.0,
+        "payload": None,
+    },
+    "dragontiger": {
+        "round_id": 1,
+        "phase": "betting",
+        "phase_end": 0.0,
+        "payload": None,
+    },
+}
+
+BETTING_SEC = 10
+PLAYING_SEC = 9
+RESULT_SEC = 4
+
+
+def _ensure_table(game):
+    now = time.time()
+    t = TABLES[game]
+    if t["phase_end"] <= 0:
+        t["phase"] = "betting"
+        t["phase_end"] = now + BETTING_SEC
+        t["payload"] = None
+        return t
+    # advance as needed
+    guard = 0
+    while now >= t["phase_end"] and guard < 10:
+        guard += 1
+        if t["phase"] == "betting":
+            t["phase"] = "playing"
+            t["phase_end"] = now + PLAYING_SEC
+            t["payload"] = _gen_baccarat_round() if game == "baccarat" else _gen_dt_round()
+        elif t["phase"] == "playing":
+            t["phase"] = "result"
+            t["phase_end"] = now + RESULT_SEC
+        else:
+            t["round_id"] += 1
+            t["phase"] = "betting"
+            t["phase_end"] = now + BETTING_SEC
+            t["payload"] = None
+        now = time.time()
+    return t
+
+
+@app.route("/api/table/state", methods=["GET"])
+def table_state():
+    game = (request.args.get("game") or "baccarat").strip().lower()
+    if game not in TABLES:
+        return jsonify({"error": "unknown game"}), 400
+    t = _ensure_table(game)
+    now = time.time()
+    remain = max(0, int(t["phase_end"] - now))
+    return jsonify({
+        "game": game,
+        "round_id": t["round_id"],
+        "phase": t["phase"],
+        "remain": remain,
+        "phase_end": t["phase_end"],
+        "server_now": now,
+        "payload": t["payload"],
+    })
+
 
 
 @app.route("/api/register", methods=["POST"])
@@ -1018,6 +1207,29 @@ def admin_bulk_pay():
         return jsonify({"error": str(e)}), 500
 
 
+
+
+
+@app.route("/api/difficulty", methods=["GET"])
+def get_difficulty():
+    return jsonify(DIFFICULTY_CONFIG)
+
+
+@app.route("/api/admin/difficulty", methods=["POST"])
+def admin_set_difficulty():
+    global DIFFICULTY_CONFIG
+    try:
+        data = request.json or {}
+        if data.get("pw") != "abcd051410" and data.get("admin_user") != "abcd051410":
+            return jsonify({"error": "Unauthorized"}), 401
+        mode = (data.get("mode") or "").strip().lower()
+        if mode not in DIFFICULTY_PRESETS:
+            return jsonify({"error": "mode must be easy|normal|hard"}), 400
+        DIFFICULTY_CONFIG = dict(DIFFICULTY_PRESETS[mode])
+        return jsonify({"success": True, **DIFFICULTY_CONFIG})
+    except Exception as e:
+        print(f"Difficulty error: {e}")
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/api/admin/rename", methods=["POST"])
