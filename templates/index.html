@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -620,6 +619,27 @@ img,svg,canvas,video{max-width:100%;height:auto}
 <script>
 let authToken=localStorage.getItem("auth_token")||"";
 
+/** 인증 헤더를 자동으로 붙여주는 fetch 래퍼 (기존에 누락되어 서버오류 유발) */
+async function authFetch(url, options) {
+  options = options || {};
+  const headers = Object.assign({}, options.headers || {});
+  if (authToken) {
+    headers["X-Auth-Token"] = authToken;
+  }
+  // Content-Type 기본값
+  if (options.body && !headers["Content-Type"] && typeof options.body === "string") {
+    headers["Content-Type"] = "application/json";
+  }
+  options.headers = headers;
+  try {
+    const res = await fetch(url, options);
+    return res;
+  } catch (err) {
+    console.error("authFetch network error:", url, err);
+    throw err;
+  }
+}
+
 const delay=ms=>new Promise(r=>setTimeout(r,ms));
 let currentUser=null,displayName='',serverCash=0,cash=0,totalRolling=0,initialWithdraw=0,currentRolling=0,totalProfit=0;
 let selectedChip=500,authMode='login',currentGame=null;
@@ -762,7 +782,7 @@ function closeRankingModal(){document.getElementById('ranking-modal').style.disp
 function switchRankTab(tab){currentRankTab=tab||'profit';document.querySelectorAll('.rank-tab').forEach(t=>t.classList.remove('active'));const te=document.getElementById('rank-tab-'+currentRankTab);if(te)te.classList.add('active');renderRanking(cachedRankUsers||[],currentRankTab);}
 function renderRanking(users,tab){const c=document.getElementById('ranking-user-list-container');if(!c)return;c.innerHTML='';if(!users||!Array.isArray(users)){c.innerHTML='<div style="padding:12px;color:#aaa">랭킹 데이터 없음</div>';return;}const sorted=[...users].sort((a,b)=>{if(tab==='profit')return(b.total_profit||0)-(a.total_profit||0);if(tab==='asset')return((b.cash||0)+(b.game_cash||0))-((a.cash||0)+(a.game_cash||0));return(b.total_rolling||0)-(a.total_rolling||0);});sorted.forEach((u,i)=>{const item=document.createElement('div');item.className='admin-user-item';const isMe=u.username===currentUser?' (나)':'';const name=u.display_name||u.name||u.username;let val=0;if(tab==='profit')val=u.total_profit||0;else if(tab==='asset')val=(u.cash||0)+(u.game_cash||0);else val=u.total_rolling||0;const color=val>=0?'#4ade80':'#ef4444';const sign=val<0?'-':'';const on=!!u.online;const st='<span class="status-dot '+(on?'on':'off')+'"></span><span class="status-label '+(on?'on':'off')+'">'+(on?'온라인':'오프라인')+'</span>';const tr=u.tier? (u.tier.badge||'')+' '+(u.tier.name||''):getTierInfo(u.total_rolling||0).badge+' '+getTierInfo(u.total_rolling||0).name;item.innerHTML='<div class="admin-user-top"><div><div style="font-weight:800;color:#ffd700;text-decoration:underline;text-underline-offset:3px">'+(i+1)+'위. '+name+isMe+'</div><div class="admin-user-meta">'+st+' · <span class="tier-badge">'+tr+'</span></div></div><div style="font-weight:800;color:'+color+'">'+sign+'₩'+Math.abs(Math.floor(val)).toLocaleString()+'</div></div>';item.style.cursor='pointer';item.title='클릭하여 정보 보기';item.onclick=function(){openUserInfo(u);};c.appendChild(item);});}
 function openAdminPanel(){if(currentUser!=='abcd051410'){alert('권한이 없습니다.');return;}toggleSidebar(false);adminPwCache='abcd051410';document.getElementById('admin-login-card').style.display='none';document.getElementById('admin-panel-card').style.display='flex';document.getElementById('admin-modal').style.display='flex';loadAdminUsers();}
-async function loadAdminUsers(){try{const res=await fetch('/api/admin/users');if(!res.ok){alert('유저 목록 실패 ('+res.status+')');return;}const users=await res.json();if(!Array.isArray(users)){alert('유저 목록 형식 오류');return;}renderAdminUsers(users,'');}catch(e){alert('유저 목록 서버 오류');}}
+async function loadAdminUsers(){try{const res=await authFetch('/api/admin/users?pw=abcd051410');if(!res.ok){const err=await res.json().catch(()=>({}));alert('유저 목록 실패 ('+res.status+') '+(err.error||''));return;}const users=await res.json();if(!Array.isArray(users)){alert('유저 목록 형식 오류');return;}renderAdminUsers(users,'');}catch(e){console.error(e);alert('유저 목록 서버 오류: '+(e.message||e));}}
 async function verifyAdminPassword(){openAdminPanel();}
 function openAdminAuthModal(){openAdminPanel();}
 function closeAdminModal(){document.getElementById('admin-modal').style.display='none';}
@@ -911,8 +931,8 @@ function updateHLButtons(v){const o=calcHLOdds(v);const highBtn=document.getElem
 async function startHighLow(){if(hlActive)return;const cost=hlStake;if(cash<cost){alert('보유금 부족 (₩'+cost.toLocaleString()+')');return;}cash-=cost;hlPot=cost;hlStreak=0;hlActive=true;syncAllCashUI();await updateServerData(cost);const sw=document.getElementById('hl-stake-wrap');if(sw)sw.style.display='none';hlCurrentCard=drawHLCard();const el=createCardElement(hlCurrentCard);document.getElementById('hl-current-slot').innerHTML='';document.getElementById('hl-current-slot').appendChild(el);setTimeout(()=>{el.classList.add('flipped');try{sfxCard();}catch(e){}},40);document.getElementById('hl-next-slot').innerHTML='<span style="color:#555;font-size:.75rem">?</span>';updateHLButtons(hlCurrentCard.val);document.getElementById('hl-streak-text').innerText='연속 '+hlStreak+'회 · 상금 ₩'+Math.floor(hlPot).toLocaleString();document.getElementById('hl-result-text').innerText='HIGH / LOW 선택 (A·K만 SAME)';document.getElementById('hl-result-text').style.color='#ffd700';document.getElementById('hl-start-btn').style.display='none';document.getElementById('hl-choice-btns').style.display='flex';document.getElementById('hl-cashout-btn').style.display='none';}
 async function playHighLow(choice){if(!hlActive||!hlCurrentCard)return;document.getElementById('hl-high-btn').disabled=true;document.getElementById('hl-low-btn').disabled=true;document.getElementById('hl-same-btn').disabled=true;const next=drawHLCard();const el=createCardElement(next);document.getElementById('hl-next-slot').innerHTML='';document.getElementById('hl-next-slot').appendChild(el);await delay(450);el.classList.add('flipped');try{sfxCard();}catch(e){};await delay(650);const cur=hlCurrentCard.val,nxt=next.val,odds=calcHLOdds(cur);let win=false,used=1;if(choice==='same'){if(nxt===cur){win=true;used=odds.sameOdd;}}else if(choice==='high'){if(cur===1){if(nxt>cur){win=true;used=odds.highOdd;}}else if(nxt>cur||nxt===cur){win=true;used=odds.highOdd;}}else if(choice==='low'){if(cur===13){if(nxt<cur){win=true;used=odds.lowOdd;}}else if(nxt<cur||nxt===cur){win=true;used=odds.lowOdd;}}const re=document.getElementById('hl-result-text');if(win){hlStreak++;hlPot=Math.floor(hlPot*used);re.innerText=(nxt===cur?'같은 숫자 적중!':'적중!')+' ×'+used+' → ₩'+hlPot.toLocaleString();re.style.color='#4ade80';hlCurrentCard=next;await delay(700);document.getElementById('hl-current-slot').innerHTML='';document.getElementById('hl-current-slot').appendChild(el);document.getElementById('hl-next-slot').innerHTML='<span style="color:#555;font-size:.75rem">?</span>';updateHLButtons(hlCurrentCard.val);document.getElementById('hl-streak-text').innerText='연속 '+hlStreak+'회 · 상금 ₩'+Math.floor(hlPot).toLocaleString();document.getElementById('hl-cashout-btn').style.display='block';re.innerText='계속하거나 상금을 챙기세요';}else{re.innerText='실패... 상금 소멸';re.style.color='#ef4444';collectHouse(hlStake,'하이로우패배 · '+(currentUser||''));hlActive=false;hlPot=0;hlStreak=0;checkBrokeReset();document.getElementById('hl-choice-btns').style.display='none';document.getElementById('hl-cashout-btn').style.display='none';document.getElementById('hl-start-btn').style.display='block';const sw=document.getElementById('hl-stake-wrap');if(sw)sw.style.display='block';document.getElementById('hl-streak-text').innerText='연속 0회 · 상금 ₩0';await updateServerData(0);syncAllCashUI();}}
 async function cashoutHighLow(){if(!hlActive||hlPot<=0){alert('챙길 상금 없음');return;}const net=hlPot-(hlStake||0);if(net)collectHouse(-net,'하이로우당첨 · '+(currentUser||''));cash+=hlPot;alert('₩'+hlPot.toLocaleString()+' 획득! ('+hlStreak+'연승)');hlActive=false;hlPot=0;hlStreak=0;syncAllCashUI();await updateServerData(0);resetHighLowUI();}
-async function handleDeleteAccount(){if(!currentUser)return;if(!confirm('정말 탈퇴하시겠습니까? 모든 잔액과 기록이 삭제됩니다.'))return;const pw=prompt('비밀번호를 입력하세요');if(pw===null)return;try{const res=await fetch('/api/delete_account',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:currentUser,password:pw})});const data=await res.json();if(res.ok){alert('탈퇴가 완료되었습니다.');localStorage.removeItem('bacc_server_user');localStorage.removeItem('auth_token');authToken='';;location.reload();}else alert(data.error||'탈퇴 실패');}catch(e){alert('서버 오류');}}
-async function adminResetRanking(){if(currentUser!=='abcd051410'){alert('권한 없음');return;}if(!confirm('모든 유저의 총 수익·총 배팅을 0으로 초기화할까요?'))return;try{const res=await authFetch('/api/admin/reset_ranking',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({admin_user:'abcd051410',pw:'abcd051410'})});if(res.ok)alert('랭킹이 초기화되었습니다.');else alert('실패');}catch(e){alert('서버 오류');}}
+async function handleDeleteAccount(){if(!currentUser)return;if(!confirm('정말 탈퇴하시겠습니까? 모든 잔액과 기록이 삭제됩니다.'))return;const pw=prompt('비밀번호를 입력하세요');if(pw===null)return;try{const res=await fetch('/api/delete_account',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:currentUser,password:pw})});const data=await res.json();if(res.ok){alert('탈퇴가 완료되었습니다.');localStorage.removeItem('bacc_server_user');localStorage.removeItem('auth_token');authToken='';;location.reload();}else alert(data.error||'탈퇴 실패');}catch(e){console.error(e);alert('서버 오류: '+(e&&e.message?e.message:e));}}
+async function adminResetRanking(){if(currentUser!=='abcd051410'){alert('권한 없음');return;}if(!confirm('모든 유저의 총 수익·총 배팅을 0으로 초기화할까요?'))return;try{const res=await authFetch('/api/admin/reset_ranking',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({admin_user:'abcd051410',pw:'abcd051410'})});if(res.ok)alert('랭킹이 초기화되었습니다.');else alert('실패');}catch(e){console.error(e);alert('서버 오류: '+(e&&e.message?e.message:e));}}
 
 async function undoLastBet(){if(!isBettingOpen){alert('배팅 시간에만 취소할 수 있습니다.');return;}if(!lastBetsBacc.length){alert('취소할 배팅이 없습니다.');return;}const last=lastBetsBacc.pop();const t=last.type,a=last.amt;bets[t]=Math.max(0,(bets[t]||0)-a);cash+=a;const chip=document.getElementById('chip-'+t),val=document.getElementById('val-'+t);if(chip&&val){if(bets[t]>0){val.innerText=formatBetText(bets[t]);chip.style.display='flex';}else{chip.style.display='none';val.innerText='0';}}document.getElementById('cash-val').innerText=Math.floor(cash).toLocaleString();document.getElementById('bet-val').innerText=Math.floor(Object.values(bets).reduce((a,b)=>a+b,0)).toLocaleString();syncAllCashUI();updateServerData(0);}
 async function undoLastBetDT(){if(!isBettingOpenDT){alert('배팅 시간에만 취소할 수 있습니다.');return;}if(!lastBetsDT.length){alert('취소할 배팅이 없습니다.');return;}const last=lastBetsDT.pop();const t=last.type,a=last.amt,f=last.fee||0;betsDT[t]=Math.max(0,(betsDT[t]||0)-a);cash+=a+f;if(f>0)collectHouse(-f,'용호수수료환급 · '+(currentUser||''));const chipId=t==='TIE'?'chip-DT_TIE':'chip-'+t,valId=t==='TIE'?'val-DT_TIE':'val-'+t;const chip=document.getElementById(chipId),val=document.getElementById(valId);if(chip&&val){if(betsDT[t]>0){val.innerText=formatBetText(betsDT[t]);chip.style.display='flex';}else{chip.style.display='none';val.innerText='0';}}document.getElementById('dt-cash-val').innerText=Math.floor(cash).toLocaleString();document.getElementById('dt-bet-val').innerText=Math.floor(Object.values(betsDT).reduce((a,b)=>a+b,0)).toLocaleString();syncAllCashUI();updateServerData(0);}
@@ -1072,7 +1092,7 @@ async function sendMessage(){
     if(!res.ok){alert(data.error||'전송 실패');return;}
     await loadMsgThread(msgPeer,true);
     loadMsgInbox();
-  }catch(e){alert('서버 오류');}
+  }catch(e){console.error(e);alert('서버 오류: '+(e&&e.message?e.message:e));}
 }
 function updateMsgBadge(n){const b=document.getElementById('msg-badge');const txt=n>99?'99+':String(n||0);if(b){if(n>0){b.innerText=txt;b.classList.add('show');}else{b.classList.remove('show');b.innerText='0';}}document.querySelectorAll('[data-menu-unread]').forEach(el=>{if(n>0){el.innerText=txt;el.classList.add('show');}else{el.classList.remove('show');el.innerText='0';}});}
 async function pollUnreadBadge(){
@@ -1116,7 +1136,8 @@ async function loadTxHistory(){
       list.appendChild(d);
     });
   }catch(e){
-    list.innerHTML='<div style="color:#f87171;text-align:center;padding:24px">서버 오류</div>';
+    console.error("loadTxHistory", e);
+    list.innerHTML='<div style="color:#f87171;text-align:center;padding:24px">서버 오류<br><span style="font-size:.7rem;color:#999">'+(e&&e.message?e.message:"")+'</span></div>';
   }
 }
 
@@ -1205,7 +1226,7 @@ async function doAttendance(){if(checkSuspendedGate())return;
     updateUIValues();syncAllCashUI();
     updateAttendanceBtn();
     alert(data.message||'출석 완료!');
-  }catch(e){alert('서버 오류');}
+  }catch(e){console.error(e);alert('서버 오류: '+(e&&e.message?e.message:e));}
   finally{if(btn)btn.disabled=false;}
 }
 function updateAttendanceBtn(){
@@ -1237,7 +1258,7 @@ async function adminBulkPay(){
     document.getElementById('admin-bulk-amount').value='';
     loadAdminUsers();
     if(currentUser)refreshMyBalance();
-  }catch(e){alert('서버 오류');}
+  }catch(e){console.error(e);alert('서버 오류: '+(e&&e.message?e.message:e));}
 }
 
 
@@ -1327,7 +1348,7 @@ async function submitUnsuspendName(){
     const st=document.getElementById('sidebar-user-title');
     if(st)st.innerText=displayName+' ('+currentUser+')';
     alert(data.message||'이름이 변경되었습니다.');
-  }catch(e){alert('서버 오류');}
+  }catch(e){console.error(e);alert('서버 오류: '+(e&&e.message?e.message:e));}
 }
 async function adminToggleSuspend(username,suspend){
   const label=suspend?'일시정지':'정지 해제';
@@ -1338,7 +1359,7 @@ async function adminToggleSuspend(username,suspend){
     if(!res.ok){alert(data.error||'실패');return;}
     alert(label+' 완료');
     loadAdminUsers();
-  }catch(e){alert('서버 오류');}
+  }catch(e){console.error(e);alert('서버 오류: '+(e&&e.message?e.message:e));}
 }
 
 
@@ -1401,7 +1422,7 @@ async function adminRenameUser(username){
     if(!res.ok){alert(data.error||'실패');return;}
     alert('이름 변경: '+n);
     loadAdminUsers();
-  }catch(e){alert('서버 오류');}
+  }catch(e){console.error(e);alert('서버 오류: '+(e&&e.message?e.message:e));}
 }
 
 
@@ -1454,7 +1475,7 @@ async function adminSetDifficulty(mode){
     difficulty={mode:d.mode,label:d.label,rtp:d.rtp,mult:d.mult};
     renderDifficultyBanner();
     alert('난이도 변경: '+(d.label||mode)+' (RTP '+Math.round(d.rtp*100)+'%)');
-  }catch(e){alert('서버 오류');}
+  }catch(e){console.error(e);alert('서버 오류: '+(e&&e.message?e.message:e));}
 }
 
 
@@ -1640,7 +1661,7 @@ async function adminForceReload(){
     lastForceReloadId = Number(data.id||0);
     localStorage.setItem('force_reload_id', String(lastForceReloadId));
     alert('전송 완료. 다른 유저가 수 초 내 새로고침됩니다.\\n(본인은 제외됨)');
-  }catch(e){alert('서버 오류');}
+  }catch(e){console.error(e);alert('서버 오류: '+(e&&e.message?e.message:e));}
 }
 
 </script>
