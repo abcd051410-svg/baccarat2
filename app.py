@@ -674,7 +674,7 @@ def register():
             )
             VALUES (%s, %s, 200000, 0, 0, 0, 0, 0.0, '', %s, 0)
             """,
-            (username, password, display_name),
+            (username, hash_password(password), display_name),
         )
         conn.commit()
         cursor.close()
@@ -747,10 +747,21 @@ def login():
         total_profit = vals[9] if vals[9] is not None else 0
         suspended = bool(vals[10]) if vals[10] is not None else False
 
-        if db_password != password:
+        if not verify_password(password, db_password or ""):
             cursor.close()
             release_db(conn)
             return jsonify({"error": "비밀번호가 일치하지 않습니다."}), 400
+
+        # 평문이면 해시로 승격
+        if not str(db_password or "").startswith("pbkdf2:"):
+            try:
+                cursor.execute(
+                    "UPDATE users SET password = %s WHERE username = %s",
+                    (hash_password(password), username),
+                )
+                conn.commit()
+            except Exception as e:
+                print(f"pw migrate: {e}")
 
         cursor.close()
         release_db(conn)
@@ -1446,7 +1457,7 @@ def house_collect():
         if amount == 0:
             return jsonify({"success": True, "skipped": True})
         # 1회 최대 5천만 (어뷰징 완화)
-        if abs(amount) > 50_000_000:
+        if abs(amount) > 30_000_000:
             return jsonify({"error": "한도 초과"}), 400
         memo = (data.get("memo") or "").strip()[:200]
         if auth_user not in memo and auth_user != ADMIN_USER:
