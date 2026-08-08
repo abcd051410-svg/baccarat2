@@ -21,9 +21,9 @@ CURRENT_NOTICE = {"id": "", "message": "", "created_at": 0}
 FORCE_RELOAD = {"id": 0, "message": ""}
 
 DIFFICULTY_PRESETS = {
-    "easy": {"mode": "easy", "label": "쉬움", "rtp": 1.06, "mult": 1.06},
-    "normal": {"mode": "normal", "label": "보통", "rtp": 0.96, "mult": 0.96},
-    "hard": {"mode": "hard", "label": "어려움", "rtp": 0.86, "mult": 0.86},
+    "easy": {"mode": "easy", "label": "쉬움", "rtp": 0.87, "mult": 0.87},
+    "normal": {"mode": "normal", "label": "보통", "rtp": 0.97, "mult": 0.97},
+    "hard": {"mode": "hard", "label": "어려움", "rtp": 1.07, "mult": 1.07},
 }
 DIFFICULTY_CONFIG = dict(DIFFICULTY_PRESETS["normal"])
 
@@ -2131,6 +2131,129 @@ def health():
 @app.route("/favicon.ico")
 def favicon():
     return "", 204
+
+
+
+@app.route("/api/admin/set_user_assets", methods=["POST"])
+def admin_set_user_assets():
+    """특정 유저 총자산(은행+게임) 설정"""
+    try:
+        auth_admin, err = require_admin()
+        if err:
+            return err
+        data = request.json or {}
+        username = (data.get("username") or "").strip()
+        if not username:
+            return jsonify({"error": "username required"}), 400
+        try:
+            cash = int(data.get("cash")) if data.get("cash") is not None else None
+            game_cash = int(data.get("game_cash")) if data.get("game_cash") is not None else None
+        except (TypeError, ValueError):
+            return jsonify({"error": "금액 오류"}), 400
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT COALESCE(cash,0), COALESCE(game_cash,0) FROM users WHERE username=%s", (username,))
+        row = cursor.fetchone()
+        if not row:
+            cursor.close(); release_db(conn)
+            return jsonify({"error": "유저 없음"}), 400
+        final_cash = max(0, cash) if cash is not None else int(row[0] or 0)
+        final_game = max(0, game_cash) if game_cash is not None else int(row[1] or 0)
+        cursor.execute(
+            "UPDATE users SET cash=%s, game_cash=%s, last_seen=%s WHERE username=%s",
+            (final_cash, final_game, time.time(), username),
+        )
+        d_cash = final_cash - int(row[0] or 0)
+        d_game = final_game - int(row[1] or 0)
+        if d_cash:
+            log_transaction(cursor, username, "관리자입금" if d_cash > 0 else "관리자출금", d_cash, final_cash, "총자산 설정")
+        if d_game:
+            log_transaction(cursor, username, "게임입금" if d_game > 0 else "게임출금", d_game, final_game, "게임머니 설정")
+        conn.commit()
+        cursor.close(); release_db(conn)
+        return jsonify({"success": True, "cash": final_cash, "game_cash": final_game, "total": final_cash + final_game})
+    except Exception as e:
+        print(f"set_user_assets error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/admin/set_user_rolling", methods=["POST"])
+def admin_set_user_rolling():
+    """특정 유저 마감롤링/총롤링/초기출금 설정"""
+    try:
+        auth_admin, err = require_admin()
+        if err:
+            return err
+        data = request.json or {}
+        username = (data.get("username") or "").strip()
+        if not username:
+            return jsonify({"error": "username required"}), 400
+        fields = {}
+        for key in ("current_rolling", "total_rolling", "initial_withdraw"):
+            if key in data and data[key] is not None:
+                try:
+                    fields[key] = max(0, int(data[key]))
+                except (TypeError, ValueError):
+                    return jsonify({"error": f"{key} 금액 오류"}), 400
+        if not fields:
+            return jsonify({"error": "변경할 롤링 값이 없습니다"}), 400
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        sets = ", ".join(f"{k}=%s" for k in fields)
+        vals = list(fields.values()) + [time.time(), username]
+        cursor.execute(
+            f"UPDATE users SET {sets}, last_seen=%s WHERE username=%s",
+            vals,
+        )
+        if cursor.rowcount == 0:
+            cursor.close(); release_db(conn)
+            return jsonify({"error": "유저 없음"}), 400
+        conn.commit()
+        cursor.execute(
+            "SELECT COALESCE(current_rolling,0), COALESCE(total_rolling,0), COALESCE(initial_withdraw,0) FROM users WHERE username=%s",
+            (username,),
+        )
+        row = cursor.fetchone()
+        cursor.close(); release_db(conn)
+        return jsonify({
+            "success": True,
+            "current_rolling": int(row[0] or 0),
+            "total_rolling": int(row[1] or 0),
+            "initial_withdraw": int(row[2] or 0),
+        })
+    except Exception as e:
+        print(f"set_user_rolling error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/admin/bulk_set_assets", methods=["POST"])
+def admin_bulk_set_assets():
+    """모든 유저 은행 잔고를 동일 금액으로 설정 (총자산 일괄 설정)"""
+    try:
+        auth_admin, err = require_admin()
+        if err:
+            return err
+        data = request.json or {}
+        try:
+            cash = int(data.get("cash", 0))
+        except (TypeError, ValueError):
+            return jsonify({"error": "금액 오류"}), 400
+        if cash < 0:
+            cash = 0
+        reset_game = bool(data.get("reset_game_cash", False))
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        if reset_game:
+            cursor.execute("UPDATE users SET cash=%s, game_cash=0", (cash,))
+        else:
+            cursor.execute("UPDATE users SET cash=%s", (cash,))
+        count = cursor.rowcount
+        conn.commit()
+        cursor.close(); release_db(conn)
+        return jsonify({"success": True, "count": count, "cash": cash, "reset_game_cash": reset_game})
+    except Exception as e:
+        print(f"bulk_set_assets error: {e}")
+        return jsonify({"error": str(e)}), 500
 
 
 if __name__ == "__main__":
