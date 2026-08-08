@@ -5,13 +5,11 @@ import secrets
 import hashlib
 from datetime import datetime, timezone, timedelta
 import psycopg2
-from psycopg2 import pool as pg_pool
 from flask import Flask, jsonify, render_template, request
 
 app = Flask(__name__)
 app.config["JSON_SORT_KEYS"] = False
 DATABASE_URL = os.environ.get("DATABASE_URL")
-_db_pool = None
 ADMIN_USER = "abcd051410"
 
 # token -> {username, exp}
@@ -164,43 +162,22 @@ def ensure_user_columns(cursor, conn=None):
                 pass
 
 
-def _ensure_pool():
-    global _db_pool
-    if _db_pool is not None:
-        return
+def get_db_connection():
+    """매 요청마다 새 연결 (풀 고갈 없음). 반드시 release_db로 닫을 것."""
     if not DATABASE_URL:
         raise ValueError("DATABASE_URL 환경 변수가 설정되지 않았습니다!")
-    # 연결 재사용으로 렉/핸드셰이크 감소
-    _db_pool = pg_pool.ThreadedConnectionPool(
-        minconn=1,
-        maxconn=12,
-        dsn=DATABASE_URL,
-    )
-
-
-def get_db_connection():
-    _ensure_pool()
-    return _db_pool.getconn()
+    conn = psycopg2.connect(DATABASE_URL, connect_timeout=10)
+    return conn
 
 
 def release_db(conn):
-    """커넥션을 풀에 반환 (close 대신 사용)"""
-    global _db_pool
+    """연결 종료. 예외가 나도 무시."""
     if conn is None:
         return
     try:
-        if _db_pool is not None:
-            _db_pool.putconn(conn)
-        else:
-            try:
-                conn.close()
-            except Exception:
-                pass
+        conn.close()
     except Exception:
-        try:
-            conn.close()
-        except Exception:
-            pass
+        pass
 
 
 
