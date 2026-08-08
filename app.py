@@ -1721,8 +1721,8 @@ def house_collect():
             amount = 0
         if amount == 0:
             return jsonify({"success": True, "skipped": True})
-        # 1회 최대 5천만 (어뷰징 완화)
-        if abs(amount) > 50_000_000:
+        # 1회 최대 500억 (시뮬용)
+        if abs(amount) > 50_000_000_000:
             return jsonify({"error": "한도 초과"}), 400
         memo = (data.get("memo") or "").strip()[:200]
         if auth_user and auth_user not in memo and auth_user != ADMIN_USER:
@@ -1759,13 +1759,12 @@ def house_collect():
                 return jsonify({"error": "관리자 계좌 없음"}), 400
 
         admin_cash = int((row[0] if row else 0) or 0)
-        # amount>0 유저 손실 → 관리자 +, amount<0 유저 당첨 → 관리자 -
+        # amount>0 유저 손실 → 관리자 +
+        # amount<0 유저 당첨 → 관리자 계좌에서 차감 (마이너스 허용)
         new_admin = admin_cash + amount
-        if new_admin < 0:
-            new_admin = 0
         cursor.execute(
             "UPDATE users SET cash=%s WHERE username=%s",
-            (new_admin, ADMIN_USER),
+            (int(new_admin), ADMIN_USER),
         )
         kind = "하우수입" if amount > 0 else "하우지급"
         log_transaction(cursor, ADMIN_USER, kind, amount, new_admin, memo or auth_user)
