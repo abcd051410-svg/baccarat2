@@ -39,7 +39,108 @@ SEASON_CONFIG = {
     "id": 1,
     "name": "시즌 1",
     "label": "ROYAL S1",
+    "started_at": time.time(),
 }
+
+
+def ensure_season_tables(cursor, conn):
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS season_meta (
+            id INT PRIMARY KEY DEFAULT 1,
+            season_id INT NOT NULL DEFAULT 1,
+            name VARCHAR(50) NOT NULL DEFAULT '시즌 1',
+            label VARCHAR(50) NOT NULL DEFAULT 'ROYAL S1',
+            started_at DOUBLE PRECISION DEFAULT 0
+        )
+        """
+    )
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS season_archives (
+            season_id INT PRIMARY KEY,
+            name VARCHAR(50) NOT NULL,
+            label VARCHAR(50) NOT NULL,
+            started_at DOUBLE PRECISION DEFAULT 0,
+            ended_at DOUBLE PRECISION DEFAULT 0,
+            rankings TEXT DEFAULT '[]'
+        )
+        """
+    )
+    cursor.execute("SELECT season_id FROM season_meta WHERE id=1")
+    row = cursor.fetchone()
+    if not row:
+        cursor.execute(
+            """
+            INSERT INTO season_meta (id, season_id, name, label, started_at)
+            VALUES (1, %s, %s, %s, %s)
+            """,
+            (
+                int(SEASON_CONFIG.get("id") or 1),
+                SEASON_CONFIG.get("name") or "시즌 1",
+                SEASON_CONFIG.get("label") or "ROYAL S1",
+                float(SEASON_CONFIG.get("started_at") or time.time()),
+            ),
+        )
+    conn.commit()
+
+
+def load_season_config_from_db():
+    """서버 시작/요청 시 DB의 현재 시즌을 메모리에 반영"""
+    global SEASON_CONFIG
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        try:
+            ensure_season_tables(cursor, conn)
+            cursor.execute(
+                "SELECT season_id, name, label, COALESCE(started_at,0) FROM season_meta WHERE id=1"
+            )
+            row = cursor.fetchone()
+            if row:
+                SEASON_CONFIG = {
+                    "id": int(row[0] or 1),
+                    "name": row[1] or f"시즌 {int(row[0] or 1)}",
+                    "label": row[2] or f"ROYAL S{int(row[0] or 1)}",
+                    "started_at": float(row[3] or 0),
+                }
+        finally:
+            cursor.close()
+            release_db(conn)
+    except Exception as e:
+        print(f"load_season_config_from_db: {e}")
+
+
+def save_season_meta():
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        try:
+            ensure_season_tables(cursor, conn)
+            cursor.execute(
+                """
+                INSERT INTO season_meta (id, season_id, name, label, started_at)
+                VALUES (1, %s, %s, %s, %s)
+                ON CONFLICT (id) DO UPDATE SET
+                    season_id=EXCLUDED.season_id,
+                    name=EXCLUDED.name,
+                    label=EXCLUDED.label,
+                    started_at=EXCLUDED.started_at
+                """,
+                (
+                    int(SEASON_CONFIG.get("id") or 1),
+                    SEASON_CONFIG.get("name") or "시즌 1",
+                    SEASON_CONFIG.get("label") or "ROYAL S1",
+                    float(SEASON_CONFIG.get("started_at") or time.time()),
+                ),
+            )
+            conn.commit()
+        finally:
+            cursor.close()
+            release_db(conn)
+    except Exception as e:
+        print(f"save_season_meta: {e}")
+
 # 일일 미션 정의 (code, title, target, reward_cash)
 DAILY_MISSIONS = [
     {"code": "attend", "title": "출석체크 1회", "target": 1, "reward": 50000},
@@ -2635,9 +2736,57 @@ def safety_self_exclude():
         return jsonify({"error": str(e)}), 500
 
 
+
 @app.route("/api/season/ranking", methods=["GET"])
 def season_ranking():
+    """현재 또는 특정 시즌 랭킹. ?season_id= 없으면 현재 시즌 실시간."""
     try:
+        load_season_config_from_db()
+        season_id = request.args.get("season_id")
+        # 과거 시즌 아카이브
+        if season_id is not None and str(season_id).strip() != "":
+            try:
+                sid = int(season_id)
+            except (TypeError, ValueError):
+                return jsonify({"error": "invalid season_id"}), 400
+            if sid == int(SEASON_CONFIG.get("id") or 0):
+                pass  # fall through to live
+            else:
+                conn = get_db_connection()
+                cursor = conn.cursor()
+                try:
+                    ensure_season_tables(cursor, conn)
+                    cursor.execute(
+                        """
+                        SELECT season_id, name, label, COALESCE(started_at,0), COALESCE(ended_at,0), COALESCE(rankings,'[]')
+                        FROM season_archives WHERE season_id=%s
+                        """,
+                        (sid,),
+                    )
+                    row = cursor.fetchone()
+                finally:
+                    cursor.close()
+                    release_db(conn)
+                if not row:
+                    return jsonify({"error": "해당 시즌 기록 없음"}), 404
+                import json as _json
+                try:
+                    users = _json.loads(row[5] or "[]")
+                except Exception:
+                    users = []
+                return jsonify({
+                    "season": {
+                        "id": int(row[0]),
+                        "name": row[1],
+                        "label": row[2],
+                        "started_at": float(row[3] or 0),
+                        "ended_at": float(row[4] or 0),
+                        "archived": True,
+                    },
+                    "users": users,
+                })
+
+        # 현재 시즌 라이브
         conn = get_db_connection()
         cursor = conn.cursor()
         try:
@@ -2674,9 +2823,165 @@ def season_ranking():
                 "online": (now - float(r[6] or 0)) < 90 if r[6] else False,
                 "tier": get_tier(r[3] or 0),
             })
-        return jsonify({"season": SEASON_CONFIG, "users": users})
+        return jsonify({"season": dict(SEASON_CONFIG), "users": users})
     except Exception as e:
+        print(f"season ranking error: {e}")
         return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/season/list", methods=["GET"])
+def season_list():
+    """현재 + 종료된 시즌 목록"""
+    try:
+        load_season_config_from_db()
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        try:
+            ensure_season_tables(cursor, conn)
+            cursor.execute(
+                """
+                SELECT season_id, name, label, COALESCE(started_at,0), COALESCE(ended_at,0)
+                FROM season_archives ORDER BY season_id DESC
+                """
+            )
+            rows = cursor.fetchall() or []
+        finally:
+            cursor.close()
+            release_db(conn)
+        seasons = []
+        # current first
+        seasons.append({
+            **dict(SEASON_CONFIG),
+            "archived": False,
+            "ended_at": None,
+        })
+        for r in rows:
+            if int(r[0]) == int(SEASON_CONFIG.get("id") or 0):
+                continue
+            seasons.append({
+                "id": int(r[0]),
+                "name": r[1],
+                "label": r[2],
+                "started_at": float(r[3] or 0),
+                "ended_at": float(r[4] or 0),
+                "archived": True,
+            })
+        return jsonify({"current": dict(SEASON_CONFIG), "seasons": seasons})
+    except Exception as e:
+        print(f"season list error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/admin/season/end", methods=["POST"])
+def admin_season_end():
+    """시즌 종료 → 스냅샷 저장 → 포인트 초기화 → 다음 시즌 시작"""
+    global SEASON_CONFIG
+    try:
+        auth_admin, err = require_admin()
+        if err:
+            return err
+        load_season_config_from_db()
+        import json as _json
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        try:
+            ensure_season_tables(cursor, conn)
+            ensure_user_columns(cursor, conn)
+
+            # snapshot rankings
+            try:
+                cursor.execute(
+                    """
+                    SELECT username, COALESCE(display_name,''), COALESCE(season_points,0),
+                           COALESCE(total_rolling,0), COALESCE(cash,0), COALESCE(game_cash,0)
+                    FROM users ORDER BY season_points DESC, total_rolling DESC LIMIT 200
+                    """
+                )
+            except Exception:
+                conn.rollback()
+                ensure_user_columns(cursor, conn)
+                cursor.execute(
+                    """
+                    SELECT username, COALESCE(display_name,''), COALESCE(season_points,0),
+                           COALESCE(total_rolling,0), COALESCE(cash,0), COALESCE(game_cash,0)
+                    FROM users ORDER BY season_points DESC, total_rolling DESC LIMIT 200
+                    """
+                )
+            rows = cursor.fetchall() or []
+            users = []
+            for idx, r in enumerate(rows):
+                users.append({
+                    "rank": idx + 1,
+                    "username": r[0],
+                    "display_name": r[1] or r[0],
+                    "season_points": int(r[2] or 0),
+                    "total_rolling": int(r[3] or 0),
+                    "cash": int(r[4] or 0),
+                    "game_cash": int(r[5] or 0),
+                    "tier": get_tier(r[3] or 0),
+                })
+
+            old_id = int(SEASON_CONFIG.get("id") or 1)
+            old_name = SEASON_CONFIG.get("name") or f"시즌 {old_id}"
+            old_label = SEASON_CONFIG.get("label") or f"ROYAL S{old_id}"
+            old_started = float(SEASON_CONFIG.get("started_at") or time.time())
+            ended_at = time.time()
+
+            cursor.execute(
+                """
+                INSERT INTO season_archives (season_id, name, label, started_at, ended_at, rankings)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                ON CONFLICT (season_id) DO UPDATE SET
+                    name=EXCLUDED.name,
+                    label=EXCLUDED.label,
+                    started_at=EXCLUDED.started_at,
+                    ended_at=EXCLUDED.ended_at,
+                    rankings=EXCLUDED.rankings
+                """,
+                (old_id, old_name, old_label, old_started, ended_at, _json.dumps(users, ensure_ascii=False)),
+            )
+
+            # reset points
+            try:
+                cursor.execute("UPDATE users SET season_points=0")
+            except Exception:
+                pass
+
+            new_id = old_id + 1
+            SEASON_CONFIG = {
+                "id": new_id,
+                "name": f"시즌 {new_id}",
+                "label": f"ROYAL S{new_id}",
+                "started_at": ended_at,
+            }
+            cursor.execute(
+                """
+                INSERT INTO season_meta (id, season_id, name, label, started_at)
+                VALUES (1, %s, %s, %s, %s)
+                ON CONFLICT (id) DO UPDATE SET
+                    season_id=EXCLUDED.season_id,
+                    name=EXCLUDED.name,
+                    label=EXCLUDED.label,
+                    started_at=EXCLUDED.started_at
+                """,
+                (new_id, SEASON_CONFIG["name"], SEASON_CONFIG["label"], ended_at),
+            )
+            conn.commit()
+        finally:
+            cursor.close()
+            release_db(conn)
+
+        return jsonify({
+            "success": True,
+            "ended": {"id": old_id, "name": old_name, "label": old_label, "ended_at": ended_at},
+            "current": dict(SEASON_CONFIG),
+            "archived_count": len(users),
+        })
+    except Exception as e:
+        print(f"admin season end error: {e}")
+        return jsonify({"error": str(e)}), 500
+
 
 
 @app.route("/api/admin/dashboard", methods=["GET"])
@@ -2719,4 +3024,8 @@ def admin_dashboard():
 
 if __name__ == "__main__":
     init_db()
+    try:
+        load_season_config_from_db()
+    except Exception as _se:
+        print(f"season load: {_se}")
     app.run(host="0.0.0.0", port=5000, debug=False, threaded=True)
