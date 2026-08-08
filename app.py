@@ -601,7 +601,14 @@ def login():
 @app.route("/api/update", methods=["POST"])
 def update_user():
     try:
-        data = request.json or {}
+        data = request.get_json(silent=True)
+        if not data:
+            raw = request.data.decode("utf-8") if request.data else ""
+            import json as _json
+            try:
+                data = _json.loads(raw) if raw else {}
+            except Exception:
+                data = {}
         username = data.get("username")
         cash = data.get("cash")
         game_cash = data.get("game_cash")
@@ -615,10 +622,24 @@ def update_user():
 
         conn = get_db_connection()
         cursor = conn.cursor()
+        try:
+            rolling_add = int(rolling_add or 0)
+        except (TypeError, ValueError):
+            rolling_add = 0
+        try:
+            cash = int(cash) if cash is not None else None
+        except (TypeError, ValueError):
+            cash = None
+        try:
+            game_cash = int(game_cash) if game_cash is not None else None
+        except (TypeError, ValueError):
+            game_cash = None
+        if not username:
+            return jsonify({"error": "username required"}), 400
         cursor.execute(
             """
             UPDATE users
-            SET cash = %s,
+            SET cash = COALESCE(%s, cash),
                 game_cash = COALESCE(%s, game_cash),
                 total_rolling = total_rolling + %s,
                 initial_withdraw = COALESCE(%s, initial_withdraw),
@@ -626,7 +647,7 @@ def update_user():
                 profit_rate = COALESCE(%s, profit_rate),
                 last_attendance = COALESCE(%s, last_attendance),
                 total_profit = COALESCE(%s, total_profit),
-                display_name = COALESCE(%s, display_name)
+                display_name = COALESCE(NULLIF(%s, ''), display_name)
             WHERE username = %s
             """,
             (
