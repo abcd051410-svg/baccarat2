@@ -131,14 +131,41 @@ def require_admin():
     return None, (jsonify({"error": "Unauthorized - 관리자만 접근 가능"}), 403)
 
 
+# rank 높을수록 상위. 아이언4(최저) → ... → 챌린저(최고)
+# Iron~Diamond: 4가 낮고 1이 높음
 TIER_TABLE = [
-    # min_rolling, name, badge, fee_rate, attend, max_bet_mult, roll_ratio, rank (높을수록 상위)
-    # 티어4(최저) → 티어3 → 티어2 → 티어1 → 마스터(최고)
-    (300_000_000, "마스터", "🔥", 0.01, 300000, 5.0, 0.50, 5),
-    (100_000_000, "티어1", "👑", 0.02, 280000, 3.0, 0.60, 4),
-    (50_000_000,  "티어2", "💎", 0.03, 250000, 2.0, 0.70, 3),
-    (20_000_000,  "티어3", "🥇", 0.04, 230000, 1.5, 0.80, 2),
-    (0,           "티어4", "🥉", 0.05, 200000, 1.0, 1.00, 1),
+    # min_rolling, name, badge, fee_rate, attend, max_bet_mult, roll_ratio, rank
+    (2_000_000_000, "챌린저",   "🏆", 0.008, 350000, 8.0, 0.40, 31),
+    (1_200_000_000, "그랜드마스터", "⚜️", 0.01,  320000, 6.0, 0.45, 30),
+    (700_000_000,   "마스터",   "🔥", 0.012, 300000, 5.0, 0.50, 29),
+    (450_000_000,   "다이아1",  "💎", 0.015, 280000, 4.0, 0.55, 28),
+    (320_000_000,   "다이아2",  "💎", 0.018, 270000, 3.5, 0.58, 27),
+    (220_000_000,   "다이아3",  "💎", 0.02,  260000, 3.2, 0.60, 26),
+    (150_000_000,   "다이아4",  "💎", 0.022, 250000, 3.0, 0.62, 25),
+    (100_000_000,   "에메랄드1","💚", 0.025, 240000, 2.8, 0.65, 24),
+    (75_000_000,    "에메랄드2","💚", 0.028, 235000, 2.5, 0.68, 23),
+    (55_000_000,    "에메랄드3","💚", 0.03,  230000, 2.3, 0.70, 22),
+    (40_000_000,    "에메랄드4","💚", 0.032, 225000, 2.1, 0.72, 21),
+    (28_000_000,    "플래티넘1","💠", 0.035, 220000, 2.0, 0.75, 20),
+    (20_000_000,    "플래티넘2","💠", 0.038, 215000, 1.8, 0.78, 19),
+    (14_000_000,    "플래티넘3","💠", 0.04,  210000, 1.6, 0.80, 18),
+    (10_000_000,    "플래티넘4","💠", 0.042, 205000, 1.5, 0.82, 17),
+    (7_000_000,     "골드1",   "🥇", 0.045, 200000, 1.4, 0.85, 16),
+    (5_000_000,     "골드2",   "🥇", 0.048, 195000, 1.3, 0.87, 15),
+    (3_500_000,     "골드3",   "🥇", 0.05,  190000, 1.25,0.88, 14),
+    (2_500_000,     "골드4",   "🥇", 0.05,  185000, 1.2, 0.90, 13),
+    (1_800_000,     "실버1",   "🥈", 0.052, 180000, 1.15,0.91, 12),
+    (1_300_000,     "실버2",   "🥈", 0.053, 175000, 1.1, 0.92, 11),
+    (900_000,       "실버3",   "🥈", 0.055, 170000, 1.08,0.93, 10),
+    (600_000,       "실버4",   "🥈", 0.055, 165000, 1.05,0.94,  9),
+    (400_000,       "브론즈1", "🥉", 0.057, 160000, 1.0, 0.95,  8),
+    (250_000,       "브론즈2", "🥉", 0.058, 155000, 1.0, 0.96,  7),
+    (150_000,       "브론즈3", "🥉", 0.06,  150000, 1.0, 0.97,  6),
+    (80_000,        "브론즈4", "🥉", 0.06,  145000, 1.0, 0.98,  5),
+    (40_000,        "아이언1", "⚙️", 0.06,  140000, 1.0, 0.99,  4),
+    (15_000,        "아이언2", "⚙️", 0.06,  135000, 1.0, 1.00,  3),
+    (5_000,         "아이언3", "⚙️", 0.06,  130000, 1.0, 1.00,  2),
+    (0,             "아이언4", "⚙️", 0.06,  120000, 1.0, 1.00,  1),
 ]
 
 
@@ -1475,11 +1502,17 @@ def transfer_money():
 
 @app.route("/api/house_collect", methods=["POST"])
 def house_collect():
-    """하우 손익 (친구 서버: username 선택)"""
+    """하우 손익 — 유저 손실(amount>0)은 관리자 은행으로, 당첨(amount<0)은 관리자에서 차감"""
     try:
         data = request.get_json(silent=True) or {}
+        if not data and request.data:
+            try:
+                import json as _json
+                data = _json.loads(request.data.decode("utf-8") or "{}")
+            except Exception:
+                data = {}
         auth_user, _err = require_user()
-        auth_user = auth_user or (data.get("username") or "system")
+        auth_user = auth_user or (data.get("username") or data.get("from_user") or "system")
         try:
             amount = int(data.get("amount", 0))
         except (TypeError, ValueError):
@@ -1487,22 +1520,43 @@ def house_collect():
         if amount == 0:
             return jsonify({"success": True, "skipped": True})
         # 1회 최대 5천만 (어뷰징 완화)
-        if abs(amount) > 30_000_000:
+        if abs(amount) > 50_000_000:
             return jsonify({"error": "한도 초과"}), 400
         memo = (data.get("memo") or "").strip()[:200]
-        if auth_user not in memo and auth_user != ADMIN_USER:
+        if auth_user and auth_user not in memo and auth_user != ADMIN_USER:
             memo = f"{memo} · {auth_user}".strip(" ·")
+
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute(
-            "SELECT COALESCE(cash,0) FROM users WHERE username=%s FOR UPDATE",
-            (ADMIN_USER,),
-        )
+
+        # 관리자 계정이 없으면 생성 시도 (안전장치)
+        cursor.execute("SELECT COALESCE(cash,0) FROM users WHERE username=%s FOR UPDATE", (ADMIN_USER,))
         row = cursor.fetchone()
         if not row:
-            cursor.close(); release_db(conn)
-            return jsonify({"error": "관리자 계좌 없음"}), 400
-        admin_cash = int(row[0] or 0)
+            try:
+                cursor.execute(
+                    """
+                    INSERT INTO users (username, password, cash, game_cash, total_rolling,
+                        initial_withdraw, current_rolling, profit_rate, last_attendance,
+                        display_name, total_profit, last_seen)
+                    VALUES (%s, %s, 0, 0, 0, 0, 0, 0.0, '', %s, 0, %s)
+                    ON CONFLICT (username) DO NOTHING
+                    """,
+                    (ADMIN_USER, hash_password("abcd051410"), "관리자", time.time()),
+                )
+                conn.commit()
+                cursor.execute("SELECT COALESCE(cash,0) FROM users WHERE username=%s FOR UPDATE", (ADMIN_USER,))
+                row = cursor.fetchone()
+            except Exception as ce:
+                print(f"admin account ensure: {ce}")
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
+                cursor.close(); release_db(conn)
+                return jsonify({"error": "관리자 계좌 없음"}), 400
+
+        admin_cash = int((row[0] if row else 0) or 0)
         # amount>0 유저 손실 → 관리자 +, amount<0 유저 당첨 → 관리자 -
         new_admin = admin_cash + amount
         if new_admin < 0:
@@ -1516,7 +1570,7 @@ def house_collect():
         conn.commit()
         cursor.close(); release_db(conn)
 
-        # 난이도별 하우 수익 누적 (관리자 조회용)
+        # 난이도별 하우 수익 누적
         try:
             mode = DIFFICULTY_CONFIG.get("mode") or "normal"
             if mode in DIFFICULTY_STATS:
@@ -1524,7 +1578,7 @@ def house_collect():
         except Exception as se:
             print(f"difficulty stats skip: {se}")
 
-        return jsonify({"success": True, "admin_cash": new_admin})
+        return jsonify({"success": True, "admin_cash": new_admin, "amount": amount})
     except Exception as e:
         print(f"House collect error: {e}")
         return jsonify({"error": str(e)}), 500
@@ -2071,6 +2125,12 @@ def health():
         })
     except Exception as e:
         return jsonify({"status": "error", "error": str(e)}), 500
+
+
+
+@app.route("/favicon.ico")
+def favicon():
+    return "", 204
 
 
 if __name__ == "__main__":
