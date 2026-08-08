@@ -647,6 +647,19 @@ async function authFetch(url, options) {
   }
 }
 
+/** last_seen(초) → "온라인" / "5분 전" / "2시간 전" 등 */
+function formatLastSeen(ts) {
+  ts = Number(ts) || 0;
+  if (!ts) return "오프라인";
+  const diff = Math.floor(Date.now() / 1000 - ts);
+  if (diff < 90) return "온라인";
+  if (diff < 3600) return Math.max(1, Math.floor(diff / 60)) + "분 전";
+  if (diff < 86400) return Math.floor(diff / 3600) + "시간 전";
+  if (diff < 86400 * 7) return Math.floor(diff / 86400) + "일 전";
+  if (diff < 86400 * 30) return Math.floor(diff / (86400 * 7)) + "주 전";
+  return "오래전";
+}
+
 const delay=ms=>new Promise(r=>setTimeout(r,ms));
 let currentUser=null,displayName='',serverCash=0,cash=0,totalRolling=0,initialWithdraw=0,currentRolling=0,totalProfit=0;
 let selectedChip=500,authMode='login',currentGame=null;
@@ -793,26 +806,56 @@ function renderRanking(users,tab){const c=document.getElementById('ranking-user-
   const rb=(b.tier&&b.tier.rank)||getTierInfo(b.total_rolling||0).rank||0;
   if(rb!==ra) return rb-ra;
   return (b.total_rolling||0)-(a.total_rolling||0);
-});sorted.forEach((u,i)=>{const item=document.createElement('div');item.className='admin-user-item';const isMe=u.username===currentUser?' (나)':'';const name=u.display_name||u.name||u.username;const tierInfo=u.tier||getTierInfo(u.total_rolling||0);const tr=(tierInfo.badge||'')+' '+(tierInfo.name||'');const roll=Math.floor(u.total_rolling||0);const on=!!u.online;const st='<span class="status-dot '+(on?'on':'off')+'"></span><span class="status-label '+(on?'on':'off')+'">'+(on?'온라인':'오프라인')+'</span>';item.innerHTML='<div class="admin-user-top"><div><div style="font-weight:800;color:#ffd700;text-decoration:underline;text-underline-offset:3px">'+(i+1)+'위. '+name+isMe+'</div><div class="admin-user-meta">'+st+' · <span class="tier-badge">'+tr+'</span></div></div><div style="font-weight:800;color:#fbbf24;font-size:.85rem">롤링 ₩'+roll.toLocaleString()+'</div></div>';item.style.cursor='pointer';item.title='클릭하여 정보 보기';item.onclick=function(){openUserInfo(u);};c.appendChild(item);});}
+});sorted.forEach((u,i)=>{const item=document.createElement('div');item.className='admin-user-item';const isMe=u.username===currentUser?' (나)':'';const name=u.display_name||u.name||u.username;const tierInfo=u.tier||getTierInfo(u.total_rolling||0);const tr=(tierInfo.badge||'')+' '+(tierInfo.name||'');const roll=Math.floor(u.total_rolling||0);const on=!!u.online;const st='<span class="status-dot '+(on?'on':'off')+'"></span><span class="status-label '+(on?'on':'off')+'">'+formatLastSeen(u.last_seen)+'</span>';item.innerHTML='<div class="admin-user-top"><div><div style="font-weight:800;color:#ffd700;text-decoration:underline;text-underline-offset:3px">'+(i+1)+'위. '+name+isMe+'</div><div class="admin-user-meta">'+st+' · <span class="tier-badge">'+tr+'</span></div></div><div style="font-weight:800;color:#fbbf24;font-size:.85rem">롤링 ₩'+roll.toLocaleString()+'</div></div>';item.style.cursor='pointer';item.title='클릭하여 정보 보기';item.onclick=function(){openUserInfo(u);};c.appendChild(item);});}
 function openAdminPanel(){if(currentUser!=='abcd051410'){alert('권한이 없습니다.');return;}toggleSidebar(false);adminPwCache='abcd051410';document.getElementById('admin-login-card').style.display='none';document.getElementById('admin-panel-card').style.display='flex';document.getElementById('admin-modal').style.display='flex';loadAdminUsers();}
 async function loadAdminUsers(){try{const res=await authFetch('/api/admin/users?pw=abcd051410');if(!res.ok){const err=await res.json().catch(()=>({}));alert('유저 목록 실패 ('+res.status+') '+(err.error||''));return;}const users=await res.json();if(!Array.isArray(users)){alert('유저 목록 형식 오류');return;}renderAdminUsers(users,'');}catch(e){console.error(e);alert('유저 목록 서버 오류: '+(e.message||e));}}
 async function verifyAdminPassword(){openAdminPanel();}
 function openAdminAuthModal(){openAdminPanel();}
 function closeAdminModal(){document.getElementById('admin-modal').style.display='none';}
-function renderAdminUsers(users,pw){const c=document.getElementById('admin-user-list-container');if(!c)return;c.innerHTML='';if(!users||!Array.isArray(users)){c.innerHTML='<div style="padding:12px;color:#f88">유저 목록 오류</div>';return;}users.forEach(u=>{const item=document.createElement('div');item.className='admin-user-item';const name=u.display_name||u.name||'-';const tp=u.total_profit||0;item.innerHTML='<div class="admin-user-top"><div><div style="font-weight:800;color:#ffd700">'+u.username+' <span class="status-dot '+(u.online?'on':'off')+'"></span><span class="status-label '+(u.online?'on':'off')+'">'+(u.online?'온라인':'오프라인')+'</span></div><div class="admin-user-meta">이름: '+name+(u.suspended?' <span style="color:#f87171">[정지]</span>':'')+'<br>은행 ₩'+Math.floor(u.cash||0).toLocaleString()+' · 게임 ₩'+Math.floor(u.game_cash||0).toLocaleString()+'<br>총수익 <span style="color:'+(tp>=0?'#4ade80':'#ef4444')+'">₩'+Math.floor(tp).toLocaleString()+'</span></div></div></div><div class="admin-actions"><button class="admin-action-btn btn-add" onclick="adminAddCash(\''+u.username+'\',\''+pw+'\',1)">+ 추가</button><button class="admin-action-btn btn-add" style="background:#7f1d1d;color:#fecaca" onclick="adminAddCash(\''+u.username+'\',\''+pw+'\',-1)">- 차감</button><button class="admin-action-btn btn-del" onclick="adminDeleteUser(\''+u.username+'\',\''+pw+'\')">삭제</button><button class="admin-action-btn" style="background:'+(u.suspended?'#14532d':'#7f1d1d')+';color:#fff;font-size:.72rem" onclick="adminToggleSuspend(\''+u.username+'\','+(!u.suspended)+')">'+(u.suspended?'정지해제':'일시정지')+'</button><button class="admin-action-btn" style="background:#1e3a5f;color:#93c5fd;font-size:.72rem" onclick="adminRenameUser(\''+u.username+'\')">이름</button></div>';c.appendChild(item);});}
-async function adminAddCash(username,pw,sign){sign=sign||1;const label=sign>0?'추가':'차감';const v=prompt('['+username+'] '+label+'할 금액:');if(v===null)return;const amt=Math.abs(parseInt(v,10));if(isNaN(amt)||amt===0){alert('올바른 금액');return;}try{const res=await authFetch('/api/admin/users');if(!res.ok)return;const users=await res.json();const u=users.find(x=>x.username===username);if(!u)return;let bank=u.cash||0,game=u.game_cash||0;if(sign>0){bank+=amt;}else{let left=amt;if(bank>=left){bank-=left;left=0;}else{left-=bank;bank=0;}if(left>0){if(game>=left)game-=left;else game=0;}}bank=Math.max(0,bank);game=Math.max(0,game);const editRes=await authFetch('/api/admin/edit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pw:'abcd051410',admin_user:'abcd051410',username,cash:bank,game_cash:game})});const editData=await editRes.json().catch(()=>({}));if(username===currentUser){const prevB=serverCash,prevG=cash;serverCash=editData.cash!=null?editData.cash:bank;cash=editData.game_cash!=null?editData.game_cash:game;if(sign>0){const dBank=Math.max(0,serverCash-prevB),dGame=Math.max(0,cash-prevG);if(dBank)showDepositAlarm(dBank,'관리자 입금 (은행)');if(dGame)showDepositAlarm(dGame,'관리자 입금 (게임)');}lastKnownBank=serverCash;lastKnownGame=cash;updateUIValues();syncAllCashUI();}loadAdminUsers();alert('₩'+amt.toLocaleString()+' '+label+' 완료\n은행 ₩'+bank.toLocaleString()+' · 게임 ₩'+game.toLocaleString());}catch(e){alert('실패');}}
-async function adminDeleteUser(username,pw){if(!confirm('['+username+'] 삭제?'))return;await authFetch('/api/admin/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pw:'abcd051410',admin_user:'abcd051410',username})});if(username===currentUser){localStorage.removeItem('bacc_server_user');localStorage.removeItem('auth_token');authToken='';;location.reload();}loadAdminUsers();}
-async function sendAdminNotice(){const msg=document.getElementById('admin-notice-input').value.trim();if(!msg){alert('내용 입력');return;}try{const res=await authFetch('/api/admin/notice',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pw:'abcd051410',admin_user:'abcd051410',message:msg})});if(res.ok){alert('공지 발송 완료');document.getElementById('admin-notice-input').value='';sessionStorage.removeItem('pin_notice_closed_id');showPinNotice(msg,'live');}else{sessionStorage.removeItem('pin_notice_closed_id');showPinNotice(msg,'live');}}catch(e){sessionStorage.removeItem('pin_notice_closed_id');showPinNotice(msg,'live');}}
-
-function createDeck(){const suits=['♠','♥','♦','♣'],ranks=[{n:'A',v:1},{n:'2',v:2},{n:'3',v:3},{n:'4',v:4},{n:'5',v:5},{n:'6',v:6},{n:'7',v:7},{n:'8',v:8},{n:'9',v:9},{n:'10',v:0},{n:'J',v:0},{n:'Q',v:0},{n:'K',v:0}];let d=[];for(let i=0;i<8;i++)for(const s of suits)for(const r of ranks)d.push({suit:s,name:r.n,val:r.v});return d.sort(()=>Math.random()-.5);}
-function createBJDeck(){const suits=['♠','♥','♦','♣'],ranks=[{n:'A',v:11},{n:'2',v:2},{n:'3',v:3},{n:'4',v:4},{n:'5',v:5},{n:'6',v:6},{n:'7',v:7},{n:'8',v:8},{n:'9',v:9},{n:'10',v:10},{n:'J',v:10},{n:'Q',v:10},{n:'K',v:10}];let d=[];for(const s of suits)for(const r of ranks)d.push({suit:s,name:r.n,val:r.v});return d.sort(()=>Math.random()-.5);}
-function getScore(h){return h.reduce((a,c)=>a+c.val,0)%10;}
-function bjScore(h){let s=h.reduce((a,c)=>a+c.val,0),aces=h.filter(c=>c.name==='A').length;while(s>21&&aces>0){s-=10;aces--;}return s;}
-function createCardElement(card){const isRed=card.suit==='♥'||card.suit==='♦';const w=document.createElement('div');w.className='card-wrapper';w.innerHTML='<div class="card-inner"><div class="card-back"></div><div class="card-front '+(isRed?'red':'black')+'"><div>'+card.name+'</div><div style="text-align:center;font-size:1rem">'+card.suit+'</div><div style="text-align:right">'+card.name+'</div></div></div>';return w;}
-function selectChip(v,el){selectedChip=v;document.querySelectorAll('.chip-btn').forEach(c=>c.classList.remove('active'));el.classList.add('active');}
-function formatBetText(a){if(a>=10000){const w=a/10000;return Number.isInteger(w)?w+'만':w.toFixed(1)+'만';}if(a>=1000){const c=a/1000;return Number.isInteger(c)?c+'천':c.toFixed(1)+'천';}return''+a;}
-function rankValueFull(c){if(c.name==='A')return 1;if(c.name==='J')return 11;if(c.name==='Q')return 12;if(c.name==='K')return 13;if(c.name==='10')return 10;return parseInt(c.name,10);}
-function rollDTMultiplier(){const r=Math.random();if(r<.50)return 2;if(r<.78)return 3;if(r<.93)return 5;return 8;}function rollDTSuit(){return DT_SUITS[Math.floor(Math.random()*DT_SUITS.length)];}function suitNameFromCard(card){if(card.suit==='♠')return '스페이드';if(card.suit==='♥')return '하트';if(card.suit==='♦')return '다이아';if(card.suit==='♣')return '클로버';return '';}
+function renderAdminUsers(users,pw){
+const box=document.getElementById('admin-user-list-container');
+if(!box)return;
+box.innerHTML='';
+if(!users||!Array.isArray(users)){box.innerHTML='<div style="padding:12px;color:#f88">유저 목록 오류</div>';return;}
+const sorted=[...users].sort((a,b)=>{
+  const ao=!!a.online,bo=!!b.online;
+  if(ao!==bo)return ao?-1:1;
+  return (Number(b.last_seen)||0)-(Number(a.last_seen)||0);
+});
+sorted.forEach(u=>{
+  const item=document.createElement('div');
+  item.className='admin-user-item';
+  const name=u.display_name||u.name||'-';
+  const tp=u.total_profit||0;
+  const seenTxt=formatLastSeen(u.last_seen);
+  const on=!!u.online;
+  const tier=u.tier||getTierInfo(u.total_rolling||0);
+  const tierLabel=(tier.badge||'')+' '+(tier.name||'');
+  item.innerHTML=
+    '<div class="admin-user-top"><div>'+
+      '<div style="font-weight:800;color:#ffd700">'+u.username+
+        ' <span class="status-dot '+(on?'on':'off')+'"></span>'+
+        '<span class="status-label '+(on?'on':'off')+'">'+seenTxt+'</span></div>'+
+      '<div class="admin-user-meta">이름: '+name+(u.suspended?' <span style="color:#f87171">[정지]</span>':'')+
+        ' · <span class="tier-badge">'+tierLabel+'</span><br>'+
+        '은행 ₩'+Math.floor(u.cash||0).toLocaleString()+' · 게임 ₩'+Math.floor(u.game_cash||0).toLocaleString()+'<br>'+
+        '총수익 <span style="color:'+(tp>=0?'#4ade80':'#ef4444')+'">₩'+Math.floor(tp).toLocaleString()+'</span>'+
+        ' · 롤링 ₩'+Math.floor(u.total_rolling||0).toLocaleString()+
+      '</div></div></div>'+
+    '<div class="admin-actions">'+
+      '<button class="admin-action-btn btn-add" data-act="add">+돈</button>'+
+      '<button class="admin-action-btn btn-del" data-act="sub">-돈</button>'+
+      '<button class="admin-action-btn" style="background:#4b5563;color:#fff" data-act="suspend">'+(u.suspended?'해제':'정지')+'</button>'+
+      '<button class="admin-action-btn" style="background:#7c3aed;color:#fff" data-act="rename">이름</button>'+
+    '</div>';
+  item.querySelector('[data-act="add"]').onclick=function(){adminAddCash(u.username,'',1);};
+  item.querySelector('[data-act="sub"]').onclick=function(){adminAddCash(u.username,'',-1);};
+  item.querySelector('[data-act="suspend"]').onclick=function(){adminToggleSuspend(u.username,!u.suspended);};
+  item.querySelector('[data-act="rename"]').onclick=function(){adminRenameUser(u.username);};
+  box.appendChild(item);
+});
+}
+function rollDTSuit(){return DT_SUITS[Math.floor(Math.random()*DT_SUITS.length)];}function suitNameFromCard(card){if(card.suit==='♠')return '스페이드';if(card.suit==='♥')return '하트';if(card.suit==='♦')return '다이아';if(card.suit==='♣')return '클로버';return '';}
 function initBigRoadGrid(gid){const g=document.getElementById(gid);if(!g)return;g.innerHTML='';for(let c=0;c<50;c++)for(let r=0;r<6;r++){const cell=document.createElement('div');cell.className='big-road-cell';cell.id=gid+'_cell_'+c+'_'+r;g.appendChild(cell);}}
 function generateRandomHistory(game){for(let i=0;i<Math.floor(Math.random()*16)+25;i++){const rand=Math.random();if(game==='baccarat'){let res='PLAYER';if(rand>.88)res='TIE';else if(rand>.48)res='BANKER';updateBigRoad(res,false,'baccarat');}else{let res='DRAGON';if(rand>.90)res='TIE';else if(rand>.45)res='TIGER';updateBigRoad(res,false,'dragontiger');}}scrollToLatestRoad(game);}
 function scrollToLatestRoad(game){const gid=game==='baccarat'?'big-road-grid':'dt-road-grid';const col=game==='baccarat'?currentCol:currentColDT;const g=document.getElementById(gid);if(g)g.scrollLeft=col>12?(col-10)*16:0;}
@@ -1008,8 +1051,18 @@ async function collectHouse(amount,memo){
   amount=Math.floor(Number(amount)||0);
   if(!amount)return;
   try{
-    await fetch('/api/house_collect',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({amount,memo:memo||''})});
-  }catch(e){}
+    const res=await authFetch('/api/house_collect',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({amount,memo:memo||'',username:currentUser||'system'})
+    });
+    if(!res.ok){
+      const err=await res.json().catch(()=>({}));
+      console.warn('house_collect fail', res.status, err);
+    }
+  }catch(e){
+    console.warn('house_collect network', e);
+  }
 }
 function updateTransferFeePreview(){
   const a=parseInt(document.getElementById('transfer-amount').value,10)||0;
@@ -1050,7 +1103,7 @@ async function loadMsgInbox(){
       d.className='msg-peer'+(msgPeer===p.username?' active':'');
       d.onclick=()=>openMsgThread(p.username,p.display_name);
       const badge=p.unread>0?'<span class="msg-badge show">'+p.unread+'</span>':'';
-      const on=!!p.online;d.innerHTML='<div class="msg-peer-name"><span><span class="status-dot '+(on?'on':'off')+'"></span>'+(p.display_name||p.username)+'</span>'+badge+'</div><div class="msg-peer-sub">'+(on?'온라인':'오프라인')+' · @'+p.username+'</div>';
+      const on=!!p.online;d.innerHTML='<div class="msg-peer-name"><span><span class="status-dot '+(on?'on':'off')+'"></span>'+(p.display_name||p.username)+'</span>'+badge+'</div><div class="msg-peer-sub">'+formatLastSeen(p.last_seen)+' · @'+p.username+'</div>';
       box.appendChild(d);
     });
   }catch(e){}
@@ -1276,11 +1329,37 @@ async function adminBulkPay(){
 
 
 const TIER_TABLE=[
-  {min:300000000,name:'마스터',badge:'🔥',fee:0.01,attend:300000,maxBetMult:5,rollRatio:0.50,rank:5},
-  {min:100000000,name:'티어1',badge:'👑',fee:0.02,attend:280000,maxBetMult:3,rollRatio:0.60,rank:4},
-  {min:50000000,name:'티어2',badge:'💎',fee:0.03,attend:250000,maxBetMult:2,rollRatio:0.70,rank:3},
-  {min:20000000,name:'티어3',badge:'🥇',fee:0.04,attend:230000,maxBetMult:1.5,rollRatio:0.80,rank:2},
-  {min:0,name:'티어4',badge:'🥉',fee:0.05,attend:200000,maxBetMult:1,rollRatio:1.00,rank:1}
+  {min:2000000000,name:'챌린저',badge:'🏆',fee:0.008,attend:350000,maxBetMult:8,rollRatio:0.40,rank:31},
+  {min:1200000000,name:'그랜드마스터',badge:'⚜️',fee:0.01,attend:320000,maxBetMult:6,rollRatio:0.45,rank:30},
+  {min:700000000,name:'마스터',badge:'🔥',fee:0.012,attend:300000,maxBetMult:5,rollRatio:0.50,rank:29},
+  {min:450000000,name:'다이아1',badge:'💎',fee:0.015,attend:280000,maxBetMult:4,rollRatio:0.55,rank:28},
+  {min:320000000,name:'다이아2',badge:'💎',fee:0.018,attend:270000,maxBetMult:3.5,rollRatio:0.58,rank:27},
+  {min:220000000,name:'다이아3',badge:'💎',fee:0.02,attend:260000,maxBetMult:3.2,rollRatio:0.60,rank:26},
+  {min:150000000,name:'다이아4',badge:'💎',fee:0.022,attend:250000,maxBetMult:3,rollRatio:0.62,rank:25},
+  {min:100000000,name:'에메랄드1',badge:'💚',fee:0.025,attend:240000,maxBetMult:2.8,rollRatio:0.65,rank:24},
+  {min:75000000,name:'에메랄드2',badge:'💚',fee:0.028,attend:235000,maxBetMult:2.5,rollRatio:0.68,rank:23},
+  {min:55000000,name:'에메랄드3',badge:'💚',fee:0.03,attend:230000,maxBetMult:2.3,rollRatio:0.70,rank:22},
+  {min:40000000,name:'에메랄드4',badge:'💚',fee:0.032,attend:225000,maxBetMult:2.1,rollRatio:0.72,rank:21},
+  {min:28000000,name:'플래티넘1',badge:'💠',fee:0.035,attend:220000,maxBetMult:2,rollRatio:0.75,rank:20},
+  {min:20000000,name:'플래티넘2',badge:'💠',fee:0.038,attend:215000,maxBetMult:1.8,rollRatio:0.78,rank:19},
+  {min:14000000,name:'플래티넘3',badge:'💠',fee:0.04,attend:210000,maxBetMult:1.6,rollRatio:0.80,rank:18},
+  {min:10000000,name:'플래티넘4',badge:'💠',fee:0.042,attend:205000,maxBetMult:1.5,rollRatio:0.82,rank:17},
+  {min:7000000,name:'골드1',badge:'🥇',fee:0.045,attend:200000,maxBetMult:1.4,rollRatio:0.85,rank:16},
+  {min:5000000,name:'골드2',badge:'🥇',fee:0.048,attend:195000,maxBetMult:1.3,rollRatio:0.87,rank:15},
+  {min:3500000,name:'골드3',badge:'🥇',fee:0.05,attend:190000,maxBetMult:1.25,rollRatio:0.88,rank:14},
+  {min:2500000,name:'골드4',badge:'🥇',fee:0.05,attend:185000,maxBetMult:1.2,rollRatio:0.90,rank:13},
+  {min:1800000,name:'실버1',badge:'🥈',fee:0.052,attend:180000,maxBetMult:1.15,rollRatio:0.91,rank:12},
+  {min:1300000,name:'실버2',badge:'🥈',fee:0.053,attend:175000,maxBetMult:1.1,rollRatio:0.92,rank:11},
+  {min:900000,name:'실버3',badge:'🥈',fee:0.055,attend:170000,maxBetMult:1.08,rollRatio:0.93,rank:10},
+  {min:600000,name:'실버4',badge:'🥈',fee:0.055,attend:165000,maxBetMult:1.05,rollRatio:0.94,rank:9},
+  {min:400000,name:'브론즈1',badge:'🥉',fee:0.057,attend:160000,maxBetMult:1,rollRatio:0.95,rank:8},
+  {min:250000,name:'브론즈2',badge:'🥉',fee:0.058,attend:155000,maxBetMult:1,rollRatio:0.96,rank:7},
+  {min:150000,name:'브론즈3',badge:'🥉',fee:0.06,attend:150000,maxBetMult:1,rollRatio:0.97,rank:6},
+  {min:80000,name:'브론즈4',badge:'🥉',fee:0.06,attend:145000,maxBetMult:1,rollRatio:0.98,rank:5},
+  {min:40000,name:'아이언1',badge:'⚙️',fee:0.06,attend:140000,maxBetMult:1,rollRatio:0.99,rank:4},
+  {min:15000,name:'아이언2',badge:'⚙️',fee:0.06,attend:135000,maxBetMult:1,rollRatio:1.00,rank:3},
+  {min:5000,name:'아이언3',badge:'⚙️',fee:0.06,attend:130000,maxBetMult:1,rollRatio:1.00,rank:2},
+  {min:0,name:'아이언4',badge:'⚙️',fee:0.06,attend:120000,maxBetMult:1,rollRatio:1.00,rank:1}
 ];
 function getTierInfo(rolling){
   rolling=Math.floor(rolling||0);
@@ -1399,7 +1478,7 @@ function openUserInfo(u){
       '<div class="user-info-row"><span>아이디</span><span>@'+escapeHtml(u.username||'')+'</span></div>'+
       '<div class="user-info-row"><span>이름</span><span>'+escapeHtml(name)+'</span></div>'+
       '<div class="user-info-row"><span>티어</span><span class="tier-badge">'+(tier.badge||'')+' '+(tier.name||'')+'</span></div>'+
-      '<div class="user-info-row"><span>상태</span><span style="color:'+(on?'#4ade80':'#9ca3af')+'">'+(on?'온라인':'오프라인')+'</span></div>'+
+      '<div class="user-info-row"><span>상태</span><span style="color:'+(on?'#4ade80':'#9ca3af')+'">'+formatLastSeen(u.last_seen)+'</span></div>'+
       '<div class="user-info-row"><span>총 수익</span><span style="color:'+((u.total_profit||0)>=0?'#4ade80':'#f87171')+'">₩'+Math.floor(u.total_profit||0).toLocaleString()+'</span></div>'+
       '<div class="user-info-row"><span>총 자산</span><span>₩'+Math.floor((u.cash||0)+(u.game_cash||0)).toLocaleString()+'</span></div>'+
       '<div class="user-info-row"><span>총 롤링</span><span>₩'+Math.floor(u.total_rolling||0).toLocaleString()+'</span></div>';
