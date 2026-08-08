@@ -472,19 +472,32 @@ img,svg,canvas,video{max-width:100%;height:auto}
 <div class="admin-pane" id="admin-pane-tools">
 <div class="admin-section-title">🎮 게임 난이도 (전 유저 공통)</div>
 <div class="diff-admin-row">
-<button type="button" id="diff-btn-easy" onclick="adminSetDifficulty('easy')">쉬움<br><span style="font-size:.65rem;font-weight:600">RTP 106%</span></button>
-<button type="button" id="diff-btn-normal" onclick="adminSetDifficulty('normal')">보통<br><span style="font-size:.65rem;font-weight:600">RTP 96%</span></button>
-<button type="button" id="diff-btn-hard" onclick="adminSetDifficulty('hard')">어려움<br><span style="font-size:.65rem;font-weight:600">RTP 86%</span></button>
+<button type="button" id="diff-btn-easy" onclick="adminSetDifficulty('easy')">쉬움<br><span style="font-size:.65rem;font-weight:600">RTP 87%</span></button>
+<button type="button" id="diff-btn-normal" onclick="adminSetDifficulty('normal')">보통<br><span style="font-size:.65rem;font-weight:600">RTP 97%</span></button>
+<button type="button" id="diff-btn-hard" onclick="adminSetDifficulty('hard')">어려움<br><span style="font-size:.65rem;font-weight:600">RTP 107%</span></button>
 </div>
 <div style="font-size:.72rem;color:#888;margin-bottom:8px">변경 시 모든 유저 배당에 즉시 반영 · 추가 서버 비용 없음</div>
 <div class="admin-section-title" style="margin-top:10px">📊 난이도별 하우 수익 (누적)</div>
 <div id="diff-stats-box" style="background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:12px;margin-bottom:12px;font-size:.82rem;line-height:1.6">
-  <div>쉬움 (106%): <b id="stat-easy" style="color:#86efac">₩0</b></div>
-  <div>보통 (96%): <b id="stat-normal" style="color:#fde68a">₩0</b></div>
-  <div>어려움 (86%): <b id="stat-hard" style="color:#fca5a5">₩0</b></div>
+  <div>쉬움 (87%): <b id="stat-easy" style="color:#86efac">₩0</b></div>
+  <div>보통 (97%): <b id="stat-normal" style="color:#fde68a">₩0</b></div>
+  <div>어려움 (107%): <b id="stat-hard" style="color:#fca5a5">₩0</b></div>
   <div style="font-size:.7rem;color:#888;margin-top:4px">양수 = 하우 이익 · 음수 = 하우 지급</div>
 </div>
+
+<div class="admin-section-title" style="margin-top:14px">💰 전체 유저 총자산 설정</div>
+<div style="font-size:.72rem;color:#888;margin-bottom:6px">모든 유저 은행 잔고를 동일 금액으로 설정합니다</div>
+<div style="display:flex;gap:6px;margin-bottom:8px">
+<input type="number" id="admin-bulk-asset-amount" class="login-input" placeholder="은행 잔고 금액" style="flex:1;text-align:right">
+</div>
+<label style="font-size:.72rem;color:#aaa;display:flex;align-items:center;gap:6px;margin-bottom:8px">
+<input type="checkbox" id="admin-bulk-reset-game"> 게임 보유금도 0으로 초기화
+</label>
+<button class="login-btn" style="background:linear-gradient(135deg,#059669,#047857);color:#fff" onclick="adminBulkSetAssets()">전체 총자산 설정 적용</button>
+
+<div class="admin-section-title" style="margin-top:14px">🔄 강제 새로고침</div>
 <button class="login-btn" style="background:linear-gradient(135deg,#dc2626,#991b1b);color:#fff" onclick="adminForceReload()">🔄 전체 강제 새로고침</button>
+
 <button class="login-btn" style="background:linear-gradient(135deg,#b45309,#7c2d12);color:#fff;margin-top:8px" onclick="adminResetRanking()">⚠️ 랭킹 초기화</button>
 <button class="login-btn" style="background:#374151;color:#fff;margin-top:8px" onclick="closeAdminModal()">닫기</button>
 </div>
@@ -494,13 +507,14 @@ img,svg,canvas,video{max-width:100%;height:auto}
 <div class="sidebar-content">
 <div class="sidebar-item"><span class="sidebar-label">은행 잔고</span><span class="sidebar-value">₩<span id="bank-cash-val">0</span></span></div>
 <div class="sidebar-item" id="tier-box">
-<span class="sidebar-label">롤 티어</span>
+<span class="sidebar-label">티어</span>
 <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
-<span class="tier-badge" id="tier-badge">🥉 브론즈</span>
+<span class="tier-badge" id="tier-badge">⚙️ 아이언4</span>
 <span style="font-size:.72rem;color:#aaa" id="tier-next">다음까지 ₩0</span>
 </div>
 <div class="tier-progress"><i id="tier-bar" style="width:0%"></i></div>
 <div id="tier-perks" style="font-size:.68rem;color:#9ca3af;margin-top:6px;line-height:1.4">혜택 로딩…</div>
+<button type="button" onclick="openTierBenefits()" style="margin-top:8px;width:100%;padding:8px;border-radius:8px;border:1px solid rgba(255,215,0,.35);background:rgba(255,215,0,.1);color:#ffd700;font-weight:700;font-size:.78rem;cursor:pointer">🎖 티어 혜택 보기</button>
 </div>
 <div class="sidebar-item"><span class="sidebar-label">출금 (잔고 → 보유금)</span><div class="withdraw-box"><input type="number" id="withdraw-input-amt" class="withdraw-input" placeholder="금액 입력"><button class="withdraw-btn" onclick="processWithdraw()">출금하기</button></div></div>
 <div class="sidebar-item"><span class="sidebar-label">마감 롤링 (티어 반영)</span><span class="sidebar-value"><span id="rolling-progress-val">0</span> / <span id="rolling-target-val">0</span></span></div>
@@ -516,7 +530,7 @@ img,svg,canvas,video{max-width:100%;height:auto}
 </div></div>
 <div class="screen active" id="screen-lobby">
 <div class="header-bar"><div class="header-left"><div class="header-title" id="header-nickname">ROYAL CASINO</div><div id="diff-banner" class="diff-banner normal">보통 · 96%</div></div><button class="menu-btn" onclick="toggleSidebar(true)">메뉴<span class="menu-unread" data-menu-unread>0</span></button></div>
-<div class="lobby-hero"><h1>ROYAL CASINO</h1><p>롤링 티어 · 시뮬레이션</p></div>
+<div class="lobby-hero"><h1>ROYAL CASINO</h1><p>티어 · 시뮬레이션</p></div>
 <div class="lobby-container">
 <div class="lobby-card" onclick="enterGame('baccarat')"><div class="lobby-icon">🃏</div><div class="lobby-info"><div class="lobby-title">바카라</div><div class="lobby-desc">플레이어 · 뱅커 · 타이 · 페어</div></div><div class="lobby-arrow">›</div></div>
 <div class="lobby-card" onclick="enterGame('dragontiger')"><div class="lobby-icon">🐉</div><div class="lobby-info"><div class="lobby-title">용호</div><div class="lobby-desc">드래곤 vs 타이거 · 랜덤 배수</div></div><div class="lobby-arrow">›</div></div>
@@ -806,7 +820,7 @@ function renderRanking(users,tab){const c=document.getElementById('ranking-user-
   const rb=(b.tier&&b.tier.rank)||getTierInfo(b.total_rolling||0).rank||0;
   if(rb!==ra) return rb-ra;
   return (b.total_rolling||0)-(a.total_rolling||0);
-});sorted.forEach((u,i)=>{const item=document.createElement('div');item.className='admin-user-item';const isMe=u.username===currentUser?' (나)':'';const name=u.display_name||u.name||u.username;const tierInfo=u.tier||getTierInfo(u.total_rolling||0);const tr=(tierInfo.badge||'')+' '+(tierInfo.name||'');const roll=Math.floor(u.total_rolling||0);const on=!!u.online;const st='<span class="status-dot '+(on?'on':'off')+'"></span><span class="status-label '+(on?'on':'off')+'">'+formatLastSeen(u.last_seen)+'</span>';item.innerHTML='<div class="admin-user-top"><div><div style="font-weight:800;color:#ffd700;text-decoration:underline;text-underline-offset:3px">'+(i+1)+'위. '+name+isMe+'</div><div class="admin-user-meta">'+st+' · <span class="tier-badge">'+tr+'</span></div></div><div style="font-weight:800;color:#fbbf24;font-size:.85rem">롤링 ₩'+roll.toLocaleString()+'</div></div>';item.style.cursor='pointer';item.title='클릭하여 정보 보기';item.onclick=function(){openUserInfo(u);};c.appendChild(item);});}
+});sorted.forEach((u,i)=>{const item=document.createElement('div');item.className='admin-user-item';const isMe=u.username===currentUser?' (나)':'';const name=u.display_name||u.name||u.username;const tierInfo=u.tier||getTierInfo(u.total_rolling||0);const tr=(tierInfo.badge||'')+' '+(tierInfo.name||'');const roll=Math.floor(u.total_rolling||0);const assets=Math.floor((u.cash||0)+(u.game_cash||0));const on=!!u.online;const st='<span class="status-dot '+(on?'on':'off')+'"></span><span class="status-label '+(on?'on':'off')+'">'+formatLastSeen(u.last_seen)+'</span>';item.innerHTML='<div class="admin-user-top"><div><div style="font-weight:800;color:#ffd700;text-decoration:underline;text-underline-offset:3px">'+(i+1)+'위. '+name+isMe+'</div><div class="admin-user-meta">'+st+' · <span class="tier-badge">'+tr+'</span></div></div><div style="text-align:right"><div style="font-weight:800;color:#fbbf24;font-size:.82rem">'+tr+'</div><div style="font-size:.72rem;color:#aaa">총자산 ₩'+assets.toLocaleString()+'</div><div style="font-size:.68rem;color:#777">롤링 ₩'+roll.toLocaleString()+'</div></div></div>';item.style.cursor='pointer';item.title='클릭하여 정보 보기';item.onclick=function(){openUserInfo(u);};c.appendChild(item);});}
 function openAdminPanel(){if(currentUser!=='abcd051410'){alert('권한이 없습니다.');return;}toggleSidebar(false);adminPwCache='abcd051410';document.getElementById('admin-login-card').style.display='none';document.getElementById('admin-panel-card').style.display='flex';document.getElementById('admin-modal').style.display='flex';loadAdminUsers();}
 async function loadAdminUsers(){try{const res=await authFetch('/api/admin/users?pw=abcd051410');if(!res.ok){const err=await res.json().catch(()=>({}));alert('유저 목록 실패 ('+res.status+') '+(err.error||''));return;}const users=await res.json();if(!Array.isArray(users)){alert('유저 목록 형식 오류');return;}renderAdminUsers(users,'');}catch(e){console.error(e);alert('유저 목록 서버 오류: '+(e.message||e));}}
 async function verifyAdminPassword(){openAdminPanel();}
@@ -845,11 +859,15 @@ sorted.forEach(u=>{
     '<div class="admin-actions">'+
       '<button class="admin-action-btn btn-add" data-act="add">+돈</button>'+
       '<button class="admin-action-btn btn-del" data-act="sub">-돈</button>'+
+      '<button class="admin-action-btn" style="background:#0d9488;color:#fff" data-act="assets">자산</button>'+
+      '<button class="admin-action-btn" style="background:#b45309;color:#fff" data-act="rolling">롤링</button>'+
       '<button class="admin-action-btn" style="background:#4b5563;color:#fff" data-act="suspend">'+(u.suspended?'해제':'정지')+'</button>'+
       '<button class="admin-action-btn" style="background:#7c3aed;color:#fff" data-act="rename">이름</button>'+
     '</div>';
   item.querySelector('[data-act="add"]').onclick=function(){adminAddCash(u.username,'',1);};
   item.querySelector('[data-act="sub"]').onclick=function(){adminAddCash(u.username,'',-1);};
+  item.querySelector('[data-act="assets"]').onclick=function(){adminSetUserAssets(u.username);};
+  item.querySelector('[data-act="rolling"]').onclick=function(){adminSetUserRolling(u.username);};
   item.querySelector('[data-act="suspend"]').onclick=function(){adminToggleSuspend(u.username,!u.suspended);};
   item.querySelector('[data-act="rename"]').onclick=function(){adminRenameUser(u.username);};
   box.appendChild(item);
@@ -1398,7 +1416,8 @@ function updateTierUI(){
   if(perks){
     const maxB=getTierMaxBet(false);
     const needPct=Math.round((t.rollRatio||1)*100);
-    perks.innerHTML='출석 ₩'+t.attend.toLocaleString()+' · 한도 ₩'+maxB.toLocaleString()+' · 마감롤링 '+needPct+'%';
+    const cond='달성 ₩'+Number(t.min||0).toLocaleString()+'~';
+    perks.innerHTML=cond+' · 출석 ₩'+Number(t.attend||0).toLocaleString()+' · 한도 ₩'+maxB.toLocaleString()+' · 마감 '+needPct+'%';
   }
 }
 
@@ -1517,7 +1536,7 @@ async function adminRenameUser(username){
 }
 
 
-let difficulty={mode:'normal',label:'보통',rtp:0.96,mult:1.0};
+let difficulty={mode:'normal',label:'보통',rtp:0.97,mult:0.97};
 function diffMult(x){
   const m=Number(difficulty.mult)||1;
   x=Math.floor(Number(x)||0);
@@ -1774,6 +1793,138 @@ async function adminForceReload(){
   }catch(e){console.error(e);alert('서버 오류: '+(e&&e.message?e.message:e));}
 }
 
+
+
+function openTierBenefits(){
+  const body=document.getElementById('tier-benefits-body');
+  if(!body)return;
+  const my=getTierInfo(totalRolling);
+  const myRoll=Math.floor(totalRolling||0);
+  let html='';
+
+  // 내 티어 요약 + 달성 조건
+  html+='<div style="background:rgba(255,215,0,.1);border:1px solid rgba(255,215,0,.35);border-radius:12px;padding:12px;margin-bottom:12px">';
+  html+='<div style="font-weight:800;color:#ffd700;font-size:.95rem;margin-bottom:6px">내 티어 · '+my.badge+' '+my.name+'</div>';
+  html+='<div style="font-size:.78rem;color:#eee;margin-bottom:4px">현재 총 롤링 <b style="color:#fbbf24">₩'+myRoll.toLocaleString()+'</b></div>';
+  html+='<div style="font-size:.75rem;color:#ccc;line-height:1.45">';
+  html+='달성 조건: 총 롤링 <b>₩'+Number(my.min||0).toLocaleString()+'</b> 이상<br>';
+  html+='출석 ₩'+Number(my.attend||0).toLocaleString()+' · 송금수수료 '+(Math.round((my.fee||0)*1000)/10)+'%<br>';
+  html+='배팅 한도 ×'+(my.maxBetMult||1)+' · 마감 필요롤링 '+Math.round((my.rollRatio||1)*100)+'%';
+  html+='</div>';
+  if(my.nextName){
+    const pct=Math.min(100, Math.max(0, my.progress||0));
+    html+='<div style="margin-top:10px;font-size:.75rem;color:#fde68a">다음 티어 <b>'+my.nextName+'</b> 까지 <b>₩'+Number(my.nextNeed||0).toLocaleString()+'</b> 남음</div>';
+    html+='<div style="height:7px;background:rgba(255,255,255,.1);border-radius:4px;overflow:hidden;margin-top:6px"><div style="height:100%;width:'+pct+'%;background:linear-gradient(90deg,#fbbf24,#f59e0b);border-radius:4px"></div></div>';
+  }else{
+    html+='<div style="margin-top:8px;font-size:.75rem;color:#86efac">최고 티어 달성</div>';
+  }
+  html+='</div>';
+
+  html+='<div style="font-size:.78rem;color:#ffd700;font-weight:700;margin-bottom:4px">📋 티어 달성 조건 & 혜택</div>';
+  html+='<div style="font-size:.7rem;color:#888;margin-bottom:8px;line-height:1.4">총 롤링(배팅 누적)이 기준 이상이면 해당 티어 달성<br>아이언4(최저) → 챌린저(최고) · 숫자 1이 4보다 상위</div>';
+
+  html+='<div style="display:flex;flex-direction:column;gap:6px">';
+  const list=[...TIER_TABLE];
+  list.forEach((t, idx)=>{
+    const mine=t.name===my.name;
+    const achieved=myRoll>=(t.min||0);
+    const nextTier=idx>0?list[idx-1]:null;
+    const maxForRange=nextTier?nextTier.min:null;
+    let cond='총 롤링 ₩'+Number(t.min||0).toLocaleString()+' 이상';
+    if(maxForRange!=null){
+      cond='총 롤링 ₩'+Number(t.min||0).toLocaleString()+' ~ ₩'+(Number(maxForRange)-1).toLocaleString();
+    }else{
+      cond='총 롤링 ₩'+Number(t.min||0).toLocaleString()+' 이상 (최고)';
+    }
+    html+='<div style="padding:10px;border-radius:10px;background:'+(mine?'rgba(255,215,0,.14)':(achieved?'rgba(34,197,94,.08)':'rgba(255,255,255,.04)'))+';border:1px solid '+(mine?'rgba(255,215,0,.4)':(achieved?'rgba(34,197,94,.25)':'rgba(255,255,255,.08)'))+'">';
+    html+='<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:4px">';
+    html+='<span style="font-weight:800;color:'+(mine?'#ffd700':'#eee')+'">'+(t.badge||'')+' '+(t.name||'')+(mine?' · 현재':'')+(achieved&&!mine?' · 달성':'')+'</span>';
+    html+='</div>';
+    html+='<div style="font-size:.72rem;color:#fbbf24;margin-bottom:3px">🎯 달성 조건: '+cond+'</div>';
+    html+='<div style="font-size:.68rem;color:#aaa;line-height:1.4">출석 ₩'+Number(t.attend||0).toLocaleString()+' · 수수료 '+(Math.round((t.fee||0)*1000)/10)+'% · 한도 ×'+(t.maxBetMult||1)+' · 마감롤링 '+Math.round((t.rollRatio||1)*100)+'%</div>';
+    html+='</div>';
+  });
+  html+='</div>';
+
+  body.innerHTML=html;
+  document.getElementById('tier-benefits-overlay').style.display='flex';
+}
+function closeTierBenefits(){
+  const el=document.getElementById('tier-benefits-overlay');
+  if(el)el.style.display='none';
+}
+
+async function adminBulkSetAssets(){
+  const v=document.getElementById('admin-bulk-asset-amount').value;
+  const cash=parseInt(v,10);
+  if(isNaN(cash)||cash<0){alert('금액을 확인하세요');return;}
+  const resetGame=!!(document.getElementById('admin-bulk-reset-game')&&document.getElementById('admin-bulk-reset-game').checked);
+  if(!confirm('모든 유저 은행 잔고를 ₩'+cash.toLocaleString()+' 으로 설정할까요?'+(resetGame?'\\n(게임 보유금 0 초기화 포함)':'')))return;
+  try{
+    const res=await authFetch('/api/admin/bulk_set_assets',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pw:'abcd051410',admin_user:'abcd051410',cash,reset_game_cash:resetGame})});
+    const data=await res.json();
+    if(!res.ok){alert(data.error||'실패');return;}
+    alert((data.count||0)+'명 적용 완료');
+    loadAdminUsers();
+    if(currentUser)refreshMyBalance();
+  }catch(e){alert('서버 오류: '+(e.message||e));}
+}
+
+async function adminSetUserAssets(username){
+  const total=prompt('['+username+'] 은행 잔고(원) 설정:');
+  if(total===null)return;
+  const cash=parseInt(total,10);
+  if(isNaN(cash)||cash<0){alert('금액 오류');return;}
+  const g=prompt('게임 보유금(원) — 빈칸이면 유지:','');
+  if(g===null)return;
+  const body={pw:'abcd051410',admin_user:'abcd051410',username,cash};
+  if(g!==''){
+    const game_cash=parseInt(g,10);
+    if(isNaN(game_cash)||game_cash<0){alert('게임머니 오류');return;}
+    body.game_cash=game_cash;
+  }
+  try{
+    const res=await authFetch('/api/admin/set_user_assets',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const data=await res.json();
+    if(!res.ok){alert(data.error||'실패');return;}
+    alert('설정 완료\\n은행 ₩'+(data.cash||0).toLocaleString()+' · 게임 ₩'+(data.game_cash||0).toLocaleString());
+    loadAdminUsers();
+    if(username===currentUser)refreshMyBalance();
+  }catch(e){alert('서버 오류');}
+}
+
+async function adminSetUserRolling(username){
+  const cur=prompt('['+username+'] 현재 마감롤링(current_rolling) 설정 — 빈칸이면 유지:','');
+  if(cur===null)return;
+  const init=prompt('초기출금(initial_withdraw) 설정 — 빈칸이면 유지:','');
+  if(init===null)return;
+  const tot=prompt('총 롤링(total_rolling) 설정 — 빈칸이면 유지 (티어에 영향):','');
+  if(tot===null)return;
+  const body={pw:'abcd051410',admin_user:'abcd051410',username};
+  if(cur!==''){const v=parseInt(cur,10);if(isNaN(v)||v<0){alert('오류');return;}body.current_rolling=v;}
+  if(init!==''){const v=parseInt(init,10);if(isNaN(v)||v<0){alert('오류');return;}body.initial_withdraw=v;}
+  if(tot!==''){const v=parseInt(tot,10);if(isNaN(v)||v<0){alert('오류');return;}body.total_rolling=v;}
+  if(body.current_rolling===undefined&&body.initial_withdraw===undefined&&body.total_rolling===undefined){alert('변경할 값이 없습니다');return;}
+  try{
+    const res=await authFetch('/api/admin/set_user_rolling',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const data=await res.json();
+    if(!res.ok){alert(data.error||'실패');return;}
+    alert('롤링 설정 완료\\n마감롤링 ₩'+(data.current_rolling||0).toLocaleString()+'\\n초기출금 ₩'+(data.initial_withdraw||0).toLocaleString()+'\\n총롤링 ₩'+(data.total_rolling||0).toLocaleString());
+    loadAdminUsers();
+  }catch(e){alert('서버 오류');}
+}
+
 </script>
+
+<div class="help-overlay" id="tier-benefits-overlay" style="display:none" onclick="if(event.target===this)closeTierBenefits()">
+<div class="help-card" style="max-width:440px">
+<div class="help-title">🎖 티어 혜택 안내</div>
+<div id="tier-benefits-body" style="font-size:.8rem;color:#ddd;line-height:1.5;max-height:60vh;overflow-y:auto"></div>
+<div class="help-btns" style="margin-top:12px">
+<button class="help-close" onclick="closeTierBenefits()" style="flex:1">닫기</button>
+</div>
+</div>
+</div>
+
 </body>
 </html>
