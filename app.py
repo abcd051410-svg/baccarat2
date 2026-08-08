@@ -738,7 +738,7 @@ def login():
 
 @app.route("/api/update", methods=["POST"])
 def update_user():
-    """게임 보유금/롤링 등만 갱신. 은행 잔고(cash)는 서버 전용 API만 변경."""
+    """보유금/롤링 갱신. 은행은 출금·마감 패턴 또는 증가만 허용(송금 입금 보호)."""
     try:
         data = request.get_json(silent=True) or {}
         if not data and request.data:
@@ -748,11 +748,10 @@ def update_user():
             except Exception:
                 data = {}
         username = (data.get("username") or "").strip()
-        auth_user, err = require_user()
-        if not username and auth_user:
-            username = auth_user
         if not username:
             return jsonify({"error": "username 필요"}), 400
+
+        cash = data.get("cash")
         game_cash = data.get("game_cash")
         rolling_add = data.get("rolling_add", 0)
         initial_withdraw = data.get("initial_withdraw")
@@ -771,11 +770,17 @@ def update_user():
         except (TypeError, ValueError):
             rolling_add = 0
         try:
+            cash = int(cash) if cash is not None else None
+        except (TypeError, ValueError):
+            cash = None
+        try:
             game_cash = int(game_cash) if game_cash is not None else None
         except (TypeError, ValueError):
             game_cash = None
         if game_cash is not None and game_cash < 0:
             game_cash = 0
+        if cash is not None and cash < 0:
+            cash = 0
 
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -788,12 +793,31 @@ def update_user():
             cursor.close(); release_db(conn)
             return jsonify({"error": "유저 없음"}), 400
         db_cash = int(row[0] or 0)
-        final_game = int(row[1] or 0) if game_cash is None else int(game_cash)
+        db_game = int(row[1] or 0)
+        final_cash = db_cash
+        final_game = db_game if game_cash is None else int(game_cash)
+
+        if cash is not None:
+            c = int(cash)
+            g = final_game
+            bank_delta = c - db_cash
+            game_delta = g - db_game
+            if bank_delta == 0:
+                final_cash = db_cash
+            elif bank_delta < 0 and game_delta >= (-bank_delta) - 1:
+                final_cash = c  # 출금
+            elif bank_delta > 0 and game_delta <= (-bank_delta) + 1:
+                final_cash = c  # 마감
+            elif bank_delta > 0:
+                final_cash = c  # 관리자 입금 등 증가 허용
+            else:
+                final_cash = db_cash  # 송금 입금 덮어쓰기 방지
 
         cursor.execute(
             """
             UPDATE users
-            SET game_cash = %s,
+            SET cash = %s,
+                game_cash = %s,
                 total_rolling = total_rolling + %s,
                 initial_withdraw = COALESCE(%s, initial_withdraw),
                 current_rolling = COALESCE(%s, current_rolling),
@@ -804,6 +828,7 @@ def update_user():
             WHERE username = %s
             """,
             (
+                final_cash,
                 final_game,
                 rolling_add,
                 initial_withdraw,
@@ -817,51 +842,10 @@ def update_user():
         )
         conn.commit()
         cursor.close(); release_db(conn)
-        return jsonify({"success": True, "cash": db_cash, "game_cash": final_game})
+        return jsonify({"success": True, "cash": final_cash, "game_cash": final_game})
     except Exception as e:
         print(f"Update error: {e}")
         return jsonify({"error": f"서버 통신 오류: {str(e)}"}), 500
-
-
-
-@app.route("/api/balance", methods=["GET"])
-def get_balance():
-    try:
-        username = (request.args.get("user") or request.args.get("username") or "").strip()
-        if not username:
-            return jsonify({"error": "user required"}), 400
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            """
-            SELECT COALESCE(cash,0), COALESCE(game_cash,0), COALESCE(total_rolling,0),
-                   COALESCE(initial_withdraw,0), COALESCE(current_rolling,0),
-                   COALESCE(display_name,''), COALESCE(total_profit,0),
-                   COALESCE(last_attendance,''), COALESCE(suspended, FALSE)
-            FROM users WHERE username=%s
-            """,
-            (username,),
-        )
-        row = cursor.fetchone()
-        cursor.close(); release_db(conn)
-        if not row:
-            return jsonify({"error": "없음"}), 400
-        return jsonify({
-            "username": username,
-            "cash": int(row[0] or 0),
-            "game_cash": int(row[1] or 0),
-            "total_rolling": int(row[2] or 0),
-            "initial_withdraw": int(row[3] or 0),
-            "current_rolling": int(row[4] or 0),
-            "display_name": row[5] or "",
-            "total_profit": int(row[6] or 0),
-            "last_attendance": row[7] or "",
-            "suspended": bool(row[8]),
-            "tier": get_tier(row[2] or 0),
-            "is_admin": username == ADMIN_USER,
-        })
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/api/me", methods=["GET"])
@@ -1266,139 +1250,146 @@ def admin_reset_ranking():
 
 @app.route("/api/transfer", methods=["POST"])
 def transfer_money():
-    """유저 간 은행 잔고 송금. 수수료 5%(최소 100원)는 관리자 계좌로."""
+    """유저 간 송금 (은행 우선, 부족분 보유금). 수수료 → 관리자."""
     try:
-        auth_user, err = require_user()
-        if err:
-            return err
-        data = request.json or {}
-        from_user = (data.get("from_user") or "").strip()
+        data = request.get_json(silent=True)
+        if not data:
+            try:
+                import json as _json
+                data = _json.loads(request.data.decode("utf-8") or "{}")
+            except Exception:
+                data = {}
+        from_user = (data.get("from_user") or data.get("username") or "").strip()
         to_user = (data.get("to_user") or "").strip()
-        amount = data.get("amount")
         password = data.get("password") or ""
-        ADMIN = ADMIN_USER
-        if not from_user or not to_user:
-            return jsonify({"error": "송금 대상 아이디를 입력해주세요."}), 400
-        if from_user == to_user:
-            return jsonify({"error": "본인에게는 송금할 수 없습니다."}), 400
         try:
-            amount = int(amount)
+            amount = int(data.get("amount") or 0)
         except (TypeError, ValueError):
             return jsonify({"error": "금액을 확인해주세요."}), 400
+
+        if not from_user or not to_user:
+            return jsonify({"error": "보내는/받는 사람을 입력해주세요."}), 400
+        if from_user == to_user:
+            return jsonify({"error": "본인에게는 송금할 수 없습니다."}), 400
         if amount <= 0:
             return jsonify({"error": "1원 이상 송금해주세요."}), 400
+        if not password:
+            return jsonify({"error": "비밀번호를 입력해주세요."}), 400
 
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute(
-            """
-            SELECT password, COALESCE(cash, 0), COALESCE(game_cash, 0), COALESCE(total_rolling, 0)
-            FROM users WHERE username = %s
-            FOR UPDATE
-            """,
-            (from_user,),
-        )
-        row = cursor.fetchone()
-        if not row:
-            cursor.close(); release_db(conn)
-            return jsonify({"error": "보내는 계정이 없습니다."}), 400
-        if not verify_password(password, row[0]):
-            cursor.close(); release_db(conn)
-            return jsonify({"error": "비밀번호가 일치하지 않습니다."}), 400
-        from_bank = int(row[1] or 0)
-        from_game = int(row[2] or 0)
-        tier = get_tier(row[3] if len(row) > 3 else 0)
-        fee = max(100, int(amount * float(tier["fee_rate"])))
-        total_need = amount + fee
-        total_avail = from_bank + from_game
-        if total_avail < total_need:
-            cursor.close(); release_db(conn)
-            return jsonify({
-                "error": (
-                    f"잔고 부족 (필요 ₩{total_need:,} = 송금 ₩{amount:,} + 수수료 ₩{fee:,} / "
-                    f"은행 ₩{from_bank:,} + 보유 ₩{from_game:,})"
-                )
-            }), 400
-
-        # 아이디 우선, 없으면 이름으로 (공백 무시)
-        cursor.execute("SELECT username FROM users WHERE username = %s", (to_user,))
-        row_to = cursor.fetchone()
-        if row_to:
-            to_user = row_to[0]
-        else:
+        try:
             cursor.execute(
-                "SELECT username FROM users WHERE TRIM(COALESCE(display_name, '')) = %s",
-                (to_user,),
+                """
+                SELECT password, COALESCE(cash, 0), COALESCE(game_cash, 0), COALESCE(total_rolling, 0)
+                FROM users WHERE username = %s
+                """,
+                (from_user,),
             )
-            matches = cursor.fetchall()
-            if not matches:
+            row = cursor.fetchone()
+            if not row:
+                return jsonify({"error": "보내는 계정이 없습니다."}), 400
+            if not verify_password(password, row[0] or ""):
+                return jsonify({"error": "비밀번호가 일치하지 않습니다."}), 400
+
+            from_bank = int(row[1] or 0)
+            from_game = int(row[2] or 0)
+            tier = get_tier(row[3] if len(row) > 3 else 0) or get_tier(0)
+            fee_rate = float(tier.get("fee_rate") or 0.05)
+            fee = max(100, int(amount * fee_rate))
+            total_need = amount + fee
+            if from_bank + from_game < total_need:
+                return jsonify({
+                    "error": f"잔고 부족 (필요 ₩{total_need:,} / 은행 ₩{from_bank:,} + 보유 ₩{from_game:,})"
+                }), 400
+
+            # 받는 사람: 아이디 → 이름
+            cursor.execute("SELECT username FROM users WHERE username = %s", (to_user,))
+            rt = cursor.fetchone()
+            if rt:
+                to_user = rt[0]
+            else:
                 cursor.execute(
-                    "SELECT username FROM users WHERE COALESCE(display_name, '') ILIKE %s",
+                    "SELECT username FROM users WHERE TRIM(COALESCE(display_name,'')) = %s",
                     (to_user,),
                 )
                 matches = cursor.fetchall()
-            if len(matches) == 1:
-                to_user = matches[0][0]
-            elif len(matches) > 1:
-                cursor.close(); release_db(conn)
-                return jsonify({"error": "같은 이름이 여러 명입니다. 아이디로 송금해주세요."}), 400
-            else:
-                cursor.close(); release_db(conn)
-                return jsonify({"error": "받는 사람(아이디/이름)을 찾을 수 없습니다."}), 400
+                if not matches:
+                    cursor.execute(
+                        "SELECT username FROM users WHERE LOWER(TRIM(COALESCE(display_name,''))) = LOWER(%s)",
+                        (to_user,),
+                    )
+                    matches = cursor.fetchall()
+                if len(matches) == 1:
+                    to_user = matches[0][0]
+                elif len(matches) > 1:
+                    return jsonify({"error": "같은 이름이 여러 명입니다. 아이디로 송금하세요."}), 400
+                else:
+                    return jsonify({"error": "받는 사람(아이디/이름)을 찾을 수 없습니다."}), 400
 
-        # 은행 잔고 우선 차감, 부족분은 게임 보유금에서
-        take_bank = min(from_bank, total_need)
-        take_game = total_need - take_bank
-        cursor.execute(
-            "UPDATE users SET cash = cash - %s, game_cash = game_cash - %s WHERE username = %s",
-            (take_bank, take_game, from_user),
-        )
-        cursor.execute(
-            "SELECT COALESCE(cash, 0) FROM users WHERE username = %s FOR UPDATE",
-            (to_user,),
-        )
-        cursor.fetchone()
-        cursor.execute(
-            "UPDATE users SET cash = cash + %s WHERE username = %s",
-            (amount, to_user),
-        )
-        # 수수료 → 관리자
-        cursor.execute("SELECT username FROM users WHERE username = %s", (ADMIN,))
-        if cursor.fetchone():
+            take_bank = min(from_bank, total_need)
+            take_game = total_need - take_bank
+
             cursor.execute(
-                "UPDATE users SET cash = cash + %s WHERE username = %s",
-                (fee, ADMIN),
+                "UPDATE users SET cash = COALESCE(cash,0) - %s, game_cash = COALESCE(game_cash,0) - %s WHERE username = %s",
+                (take_bank, take_game, from_user),
             )
-        else:
-            # 관리자 계정 없으면 무시하지 않고 로그만
-            print(f"[WARN] Admin {ADMIN} missing, fee ₩{fee} not credited")
+            cursor.execute(
+                "UPDATE users SET cash = COALESCE(cash,0) + %s WHERE username = %s",
+                (amount, to_user),
+            )
+            # 수수료 → 관리자
+            cursor.execute("SELECT username FROM users WHERE username = %s", (ADMIN_USER,))
+            if cursor.fetchone():
+                cursor.execute(
+                    "UPDATE users SET cash = COALESCE(cash,0) + %s WHERE username = %s",
+                    (fee, ADMIN_USER),
+                )
 
-        # 기록
-        cursor.execute("SELECT cash FROM users WHERE username = %s", (from_user,))
-        from_bal = (cursor.fetchone() or [0])[0] or 0
-        cursor.execute("SELECT cash FROM users WHERE username = %s", (to_user,))
-        to_bal = (cursor.fetchone() or [0])[0] or 0
-        log_transaction(cursor, from_user, "송금출금", -amount, from_bal, f"{to_user}에게 송금")
-        if fee > 0:
-            log_transaction(cursor, from_user, "송금수수료", -fee, from_bal, "송금 수수료")
-        log_transaction(cursor, to_user, "송금입금", amount, to_bal, f"{from_user}에게서 받음")
-        conn.commit()
-        cursor.execute("SELECT cash, game_cash FROM users WHERE username = %s", (from_user,))
-        me = cursor.fetchone()
-        cursor.close(); release_db(conn)
-        return jsonify({
-            "success": True,
-            "cash": me[0] if me else 0,
-            "game_cash": me[1] if me else 0,
-            "fee": fee,
-            "sent": amount,
-            "message": f"{to_user}님에게 ₩{amount:,} 송금 완료 (수수료 ₩{fee:,})",
-            "take_bank": take_bank,
-            "take_game": take_game,
-        })
+            cursor.execute("SELECT COALESCE(cash,0) FROM users WHERE username = %s", (from_user,))
+            from_bal = int((cursor.fetchone() or [0])[0] or 0)
+            cursor.execute("SELECT COALESCE(cash,0) FROM users WHERE username = %s", (to_user,))
+            to_bal = int((cursor.fetchone() or [0])[0] or 0)
+
+            try:
+                log_transaction(cursor, from_user, "송금출금", -amount, from_bal, f"{to_user}에게 송금")
+                if fee:
+                    log_transaction(cursor, from_user, "송금수수료", -fee, from_bal, "송금 수수료")
+                log_transaction(cursor, to_user, "송금입금", amount, to_bal, f"{from_user}에게서 받음")
+            except Exception as le:
+                print(f"transfer log skip: {le}")
+
+            conn.commit()
+            cursor.execute(
+                "SELECT COALESCE(cash,0), COALESCE(game_cash,0) FROM users WHERE username = %s",
+                (from_user,),
+            )
+            me = cursor.fetchone()
+            return jsonify({
+                "success": True,
+                "cash": int(me[0] or 0) if me else 0,
+                "game_cash": int(me[1] or 0) if me else 0,
+                "fee": fee,
+                "sent": amount,
+                "to_user": to_user,
+                "message": f"{to_user}님에게 ₩{amount:,} 송금 완료 (수수료 ₩{fee:,})",
+            })
+        except Exception as e:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            print(f"Transfer inner error: {e}")
+            return jsonify({"error": f"송금 처리 오류: {str(e)}"}), 500
+        finally:
+            try:
+                cursor.close()
+            except Exception:
+                pass
+            release_db(conn)
     except Exception as e:
         print(f"Transfer error: {e}")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": f"서버 오류: {str(e)}"}), 500
 
 
 @app.route("/api/house_collect", methods=["POST"])
