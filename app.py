@@ -21,11 +21,18 @@ CURRENT_NOTICE = {"id": "", "message": "", "created_at": 0}
 FORCE_RELOAD = {"id": 0, "message": ""}
 
 DIFFICULTY_PRESETS = {
-    "easy": {"mode": "easy", "label": "쉬움", "rtp": 0.98, "mult": 1.05},
-    "normal": {"mode": "normal", "label": "보통", "rtp": 0.96, "mult": 1.0},
-    "hard": {"mode": "hard", "label": "어려움", "rtp": 0.92, "mult": 0.92},
+    "easy": {"mode": "easy", "label": "쉬움", "rtp": 1.06, "mult": 1.06},
+    "normal": {"mode": "normal", "label": "보통", "rtp": 0.96, "mult": 0.96},
+    "hard": {"mode": "hard", "label": "어려움", "rtp": 0.86, "mult": 0.86},
 }
 DIFFICULTY_CONFIG = dict(DIFFICULTY_PRESETS["normal"])
+
+# 난이도별 하우 수익 누적 (관리자 조회용, 메모리)
+DIFFICULTY_STATS = {
+    "easy": {"house_net": 0},
+    "normal": {"house_net": 0},
+    "hard": {"house_net": 0},
+}
 
 
 def hash_password(password: str) -> str:
@@ -125,20 +132,20 @@ def require_admin():
 
 
 TIER_TABLE = [
-    # min_rolling, name, badge, fee_rate, attend, max_bet_mult, roll_ratio
-    (300_000_000, "마스터", "🔥", 0.01, 300000, 5.0, 0.50),
-    (100_000_000, "다이아", "👑", 0.02, 280000, 3.0, 0.60),
-    (50_000_000, "플래티넘", "💎", 0.03, 250000, 2.0, 0.70),
-    (20_000_000, "골드", "🥇", 0.04, 230000, 1.5, 0.80),
-    (5_000_000, "실버", "🥈", 0.045, 210000, 1.2, 0.90),
-    (0, "브론즈", "🥉", 0.05, 200000, 1.0, 1.00),
+    # min_rolling, name, badge, fee_rate, attend, max_bet_mult, roll_ratio, rank (높을수록 상위)
+    # 티어4(최저) → 티어3 → 티어2 → 티어1 → 마스터(최고)
+    (300_000_000, "마스터", "🔥", 0.01, 300000, 5.0, 0.50, 5),
+    (100_000_000, "티어1", "👑", 0.02, 280000, 3.0, 0.60, 4),
+    (50_000_000,  "티어2", "💎", 0.03, 250000, 2.0, 0.70, 3),
+    (20_000_000,  "티어3", "🥇", 0.04, 230000, 1.5, 0.80, 2),
+    (0,           "티어4", "🥉", 0.05, 200000, 1.0, 1.00, 1),
 ]
 
 
 def get_tier(rolling):
     rolling = int(rolling or 0)
     for i, row in enumerate(TIER_TABLE):
-        mn, name, badge, fee, attend, mult, ratio = row
+        mn, name, badge, fee, attend, mult, ratio, rank = row
         if rolling >= mn:
             if i == 0:
                 next_name, next_need = None, 0
@@ -156,6 +163,7 @@ def get_tier(rolling):
                 "rolling": rolling,
                 "next_name": next_name,
                 "next_need": next_need,
+                "rank": rank,
             }
     return get_tier(0)
 
@@ -257,7 +265,7 @@ def init_db():
             CREATE TABLE IF NOT EXISTS users (
                 username VARCHAR(50) PRIMARY KEY,
                 password VARCHAR(100) NOT NULL,
-                cash BIGINT DEFAULT 200000,
+                cash BIGINT DEFAULT 500000,
                 game_cash BIGINT DEFAULT 0,
                 total_rolling BIGINT DEFAULT 0,
                 initial_withdraw BIGINT DEFAULT 0,
@@ -692,7 +700,7 @@ def register():
                 initial_withdraw, current_rolling, profit_rate, last_attendance,
                 display_name, total_profit, last_seen
             )
-            VALUES (%s, %s, 200000, 0, 0, 0, 0, 0.0, '', %s, 0, %s)
+            VALUES (%s, %s, 500000, 0, 0, 0, 0, 0.0, '', %s, 0, %s)
             """,
             (username, hash_password(password), display_name, time.time()),
         )
@@ -1507,6 +1515,15 @@ def house_collect():
         log_transaction(cursor, ADMIN_USER, kind, amount, new_admin, memo or auth_user)
         conn.commit()
         cursor.close(); release_db(conn)
+
+        # 난이도별 하우 수익 누적 (관리자 조회용)
+        try:
+            mode = DIFFICULTY_CONFIG.get("mode") or "normal"
+            if mode in DIFFICULTY_STATS:
+                DIFFICULTY_STATS[mode]["house_net"] = int(DIFFICULTY_STATS[mode].get("house_net", 0)) + int(amount)
+        except Exception as se:
+            print(f"difficulty stats skip: {se}")
+
         return jsonify({"success": True, "admin_cash": new_admin})
     except Exception as e:
         print(f"House collect error: {e}")
@@ -1678,17 +1695,26 @@ def get_transactions():
             limit = 50
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute(
-            """
-            SELECT id, kind, amount, balance_after, memo, created_at
-            FROM transactions
-            WHERE username = %s
-            ORDER BY created_at DESC, id DESC
-            LIMIT %s
-            """,
-            (username, limit),
-        )
-        rows = cursor.fetchall()
+        try:
+            cursor.execute(
+                """
+                SELECT id, kind, amount, balance_after, memo, created_at
+                FROM transactions
+                WHERE username = %s
+                ORDER BY created_at DESC, id DESC
+                LIMIT %s
+                """,
+                (username, limit),
+            )
+            rows = cursor.fetchall()
+        except Exception as qe:
+            # 테이블 없으면 빈 목록 반환 (초기화 안 된 경우 대비)
+            print(f"Transactions query fallback: {qe}")
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            rows = []
         cursor.close(); release_db(conn)
         items = [
             {
@@ -1704,7 +1730,7 @@ def get_transactions():
         return jsonify({"items": items, "limit": limit})
     except Exception as e:
         print(f"Transactions error: {e}")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "입출금 기록을 불러올 수 없습니다. 잠시 후 다시 시도해주세요."}), 500
 
 
 @app.route("/api/attendance", methods=["POST"])
@@ -1828,6 +1854,10 @@ def get_difficulty():
     d = dict(DIFFICULTY_CONFIG)
     d["force_reload_id"] = FORCE_RELOAD.get("id", 0)
     d["force_reload_message"] = FORCE_RELOAD.get("message") or ""
+    d["stats"] = {
+        k: {"house_net": int(v.get("house_net", 0))}
+        for k, v in DIFFICULTY_STATS.items()
+    }
     return jsonify(d)
 
 
@@ -1843,7 +1873,14 @@ def admin_set_difficulty():
         if mode not in DIFFICULTY_PRESETS:
             return jsonify({"error": "mode must be easy|normal|hard"}), 400
         DIFFICULTY_CONFIG = dict(DIFFICULTY_PRESETS[mode])
-        return jsonify({"success": True, **DIFFICULTY_CONFIG})
+        return jsonify({
+            "success": True,
+            **DIFFICULTY_CONFIG,
+            "stats": {
+                k: {"house_net": int(v.get("house_net", 0))}
+                for k, v in DIFFICULTY_STATS.items()
+            },
+        })
     except Exception as e:
         print(f"Difficulty error: {e}")
         return jsonify({"error": str(e)}), 500
@@ -2039,4 +2076,3 @@ def health():
 if __name__ == "__main__":
     init_db()
     app.run(host="0.0.0.0", port=5000, debug=False, threaded=True)
- 
