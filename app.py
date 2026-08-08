@@ -11,6 +11,8 @@ DATABASE_URL = os.environ.get("DATABASE_URL")
 # 공지 (메모리 저장 — 서버 재시작 시 초기화)
 # 영구 저장이 필요하면 notices 테이블로 분리 가능
 CURRENT_NOTICE = {"id": "", "message": "", "created_at": 0}
+FORCE_RELOAD = {"id": 0, "message": ""}
+
 
 # 전역 난이도 (서버 메모리 — 재시작 시 normal)
 # easy 106% / normal 96% / hard 86%  (기준 normal=1.0)
@@ -1322,9 +1324,33 @@ def admin_bulk_pay():
 
 
 
+
+@app.route("/api/force_reload", methods=["GET"])
+def get_force_reload():
+    return jsonify({"id": FORCE_RELOAD.get("id", 0), "message": FORCE_RELOAD.get("message") or ""})
+
+
+@app.route("/api/admin/force_reload", methods=["POST"])
+def admin_force_reload():
+    global FORCE_RELOAD
+    try:
+        data = request.json or {}
+        if data.get("pw") != "abcd051410" and data.get("admin_user") != "abcd051410":
+            return jsonify({"error": "Unauthorized"}), 401
+        msg = (data.get("message") or "서버가 갱신되었습니다. 잠시 후 새로고침됩니다.").strip()
+        FORCE_RELOAD = {"id": int(FORCE_RELOAD.get("id", 0)) + 1, "message": msg}
+        return jsonify({"success": True, **FORCE_RELOAD})
+    except Exception as e:
+        print(f"Force reload error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/difficulty", methods=["GET"])
 def get_difficulty():
-    return jsonify(DIFFICULTY_CONFIG)
+    d = dict(DIFFICULTY_CONFIG)
+    d["force_reload_id"] = FORCE_RELOAD.get("id", 0)
+    d["force_reload_message"] = FORCE_RELOAD.get("message") or ""
+    return jsonify(d)
 
 
 @app.route("/api/admin/difficulty", methods=["POST"])
