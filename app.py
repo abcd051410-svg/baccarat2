@@ -1,6 +1,8 @@
 import os
 import time
 import random
+import secrets
+import hashlib
 from datetime import datetime, timezone, timedelta
 import psycopg2
 from psycopg2 import pool as pg_pool
@@ -10,6 +12,81 @@ app = Flask(__name__)
 app.config["JSON_SORT_KEYS"] = False
 DATABASE_URL = os.environ.get("DATABASE_URL")
 _db_pool = None
+ADMIN_USER = "abcd051410"
+
+# token -> {username, exp}
+AUTH_TOKENS = {}
+TOKEN_TTL = 60 * 60 * 24 * 7  # 7 days
+
+
+def hash_password(password: str) -> str:
+    salt = secrets.token_hex(16)
+    dig = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), 120000)
+    return f"pbkdf2:{salt}:{dig.hex()}"
+
+
+def verify_password(password: str, stored: str) -> bool:
+    if not stored:
+        return False
+    if stored.startswith("pbkdf2:"):
+        try:
+            _, salt, hexdig = stored.split(":", 2)
+            dig = hashlib.pbkdf2_hmac(
+                "sha256", password.encode("utf-8"), salt.encode("utf-8"), 120000
+            )
+            return secrets.compare_digest(dig.hex(), hexdig)
+        except Exception:
+            return False
+    # 구버전 평문 호환
+    return secrets.compare_digest(str(stored), str(password))
+
+
+def issue_token(username: str) -> str:
+    # 유저당 토큰 정리(간단)
+    dead = [k for k, v in AUTH_TOKENS.items() if v.get("exp", 0) < time.time() or v.get("username") == username]
+    for k in dead:
+        AUTH_TOKENS.pop(k, None)
+    tok = secrets.token_urlsafe(32)
+    AUTH_TOKENS[tok] = {"username": username, "exp": time.time() + TOKEN_TTL}
+    return tok
+
+
+def get_auth_username():
+    tok = request.headers.get("X-Auth-Token") or ""
+    if not tok and request.method in ("POST", "PUT", "PATCH"):
+        data = request.get_json(silent=True)
+        if not data:
+            try:
+                import json as _json
+                data = _json.loads(request.data.decode("utf-8") or "{}")
+            except Exception:
+                data = {}
+        tok = (data or {}).get("token") or ""
+    if not tok and request.method == "GET":
+        tok = request.args.get("token") or ""
+    if not tok:
+        return None
+    info = AUTH_TOKENS.get(tok)
+    if not info or info.get("exp", 0) < time.time():
+        AUTH_TOKENS.pop(tok, None)
+        return None
+    return info.get("username")
+
+
+def require_user():
+    u = get_auth_username()
+    if not u:
+        return None, (jsonify({"error": "로그인이 필요합니다."}), 401)
+    return u, None
+
+
+def require_admin():
+    u, err = require_user()
+    if err:
+        return None, err
+    if u != ADMIN_USER:
+        return None, (jsonify({"error": "Unauthorized"}), 401)
+    return u, None
 
 # 공지 (메모리 저장 — 서버 재시작 시 초기화)
 # 영구 저장이 필요하면 notices 테이블로 분리 가능
@@ -628,6 +705,8 @@ def login():
             "total_profit": total_profit,
             "tier": get_tier(total_rolling),
             "suspended": bool(suspended),
+            "token": issue_token(username),
+            "is_admin": username == ADMIN_USER,
         })
     except Exception as e:
         print(f"Login error: {e}")
@@ -636,17 +715,16 @@ def login():
 
 @app.route("/api/update", methods=["POST"])
 def update_user():
+    """게임 보유금/롤링 등만 갱신. 은행 잔고(cash)는 서버 전용 API만 변경."""
     try:
-        data = request.get_json(silent=True)
-        if not data:
-            raw = request.data.decode("utf-8") if request.data else ""
-            import json as _json
-            try:
-                data = _json.loads(raw) if raw else {}
-            except Exception:
-                data = {}
-        username = data.get("username")
-        cash = data.get("cash")
+        auth_user, err = require_user()
+        if err:
+            return err
+        data = request.get_json(silent=True) or {}
+        username = (data.get("username") or "").strip()
+        if username != auth_user:
+            return jsonify({"error": "본인 계정만 수정할 수 있습니다."}), 403
+
         game_cash = data.get("game_cash")
         rolling_add = data.get("rolling_add", 0)
         initial_withdraw = data.get("initial_withdraw")
@@ -656,66 +734,38 @@ def update_user():
         total_profit = data.get("total_profit")
         display_name = data.get("display_name")
 
-        conn = get_db_connection()
-        cursor = conn.cursor()
         try:
             rolling_add = int(rolling_add or 0)
+            if rolling_add < 0:
+                rolling_add = 0
+            if rolling_add > 100_000_000:
+                rolling_add = 100_000_000
         except (TypeError, ValueError):
             rolling_add = 0
-        try:
-            cash = int(cash) if cash is not None else None
-        except (TypeError, ValueError):
-            cash = None
         try:
             game_cash = int(game_cash) if game_cash is not None else None
         except (TypeError, ValueError):
             game_cash = None
-        if not username:
-            release_db(conn)
-            return jsonify({"error": "username required"}), 400
+        if game_cash is not None and game_cash < 0:
+            game_cash = 0
 
+        conn = get_db_connection()
+        cursor = conn.cursor()
         cursor.execute(
             "SELECT COALESCE(cash, 0), COALESCE(game_cash, 0) FROM users WHERE username = %s",
             (username,),
         )
         row = cursor.fetchone()
         if not row:
-            cursor.close()
-            release_db(conn)
+            cursor.close(); release_db(conn)
             return jsonify({"error": "유저 없음"}), 400
         db_cash = int(row[0] or 0)
-        db_game = int(row[1] or 0)
-
-        # 은행 잔고(cash) 보호:
-        # 송금 입금/관리자 지급 후, 구버전 클라이언트가 예전 잔액으로 덮어쓰는 것 방지
-        # 허용: 출금(은행↓ 보유↑), 마감(은행↑ 보유↓), 동일
-        final_cash = db_cash
-        final_game = db_game if game_cash is None else int(game_cash)
-
-        if cash is not None:
-            c = int(cash)
-            g = final_game
-            bank_delta = c - db_cash
-            game_delta = g - db_game
-            if bank_delta == 0:
-                final_cash = db_cash
-            elif bank_delta < 0 and game_delta >= (-bank_delta) - 1:
-                # 은행 → 보유 출금
-                final_cash = c
-            elif bank_delta > 0 and game_delta <= (-bank_delta) + 1:
-                # 보유 → 은행 마감
-                final_cash = c
-            else:
-                # 클라이언트가 은행만 낮추려 함(송금 입금 덮어쓰기 등) → 은행 유지
-                final_cash = db_cash
-                # 보유금은 클라이언트 값 반영(게임 중)
-                final_game = g
+        final_game = int(row[1] or 0) if game_cash is None else int(game_cash)
 
         cursor.execute(
             """
             UPDATE users
-            SET cash = %s,
-                game_cash = %s,
+            SET game_cash = %s,
                 total_rolling = total_rolling + %s,
                 initial_withdraw = COALESCE(%s, initial_withdraw),
                 current_rolling = COALESCE(%s, current_rolling),
@@ -726,7 +776,6 @@ def update_user():
             WHERE username = %s
             """,
             (
-                final_cash,
                 final_game,
                 rolling_add,
                 initial_withdraw,
@@ -739,24 +788,172 @@ def update_user():
             ),
         )
         conn.commit()
-        cursor.close()
-        release_db(conn)
-        return jsonify({
-            "success": True,
-            "cash": final_cash,
-            "game_cash": final_game,
-        })
+        cursor.close(); release_db(conn)
+        return jsonify({"success": True, "cash": db_cash, "game_cash": final_game})
     except Exception as e:
         print(f"Update error: {e}")
         return jsonify({"error": f"서버 통신 오류: {str(e)}"}), 500
 
 
+@app.route("/api/me", methods=["GET"])
+def api_me():
+    try:
+        auth_user, err = require_user()
+        if err:
+            return err
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT COALESCE(cash,0), COALESCE(game_cash,0), COALESCE(total_rolling,0),
+                   COALESCE(initial_withdraw,0), COALESCE(current_rolling,0),
+                   COALESCE(display_name,''), COALESCE(total_profit,0),
+                   COALESCE(last_attendance,''), COALESCE(suspended, FALSE)
+            FROM users WHERE username = %s
+            """,
+            (auth_user,),
+        )
+        row = cursor.fetchone()
+        cursor.close(); release_db(conn)
+        if not row:
+            return jsonify({"error": "유저 없음"}), 400
+        return jsonify({
+            "username": auth_user,
+            "cash": int(row[0] or 0),
+            "game_cash": int(row[1] or 0),
+            "total_rolling": int(row[2] or 0),
+            "initial_withdraw": int(row[3] or 0),
+            "current_rolling": int(row[4] or 0),
+            "display_name": row[5] or "",
+            "total_profit": int(row[6] or 0),
+            "last_attendance": row[7] or "",
+            "suspended": bool(row[8]),
+            "tier": get_tier(row[2] or 0),
+            "is_admin": auth_user == ADMIN_USER,
+        })
+    except Exception as e:
+        print(f"me error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/withdraw", methods=["POST"])
+def api_withdraw():
+    """은행 → 게임 보유금"""
+    try:
+        auth_user, err = require_user()
+        if err:
+            return err
+        data = request.get_json(silent=True) or {}
+        try:
+            amount = int(data.get("amount", 0))
+        except (TypeError, ValueError):
+            return jsonify({"error": "금액 오류"}), 400
+        if amount <= 0:
+            return jsonify({"error": "1원 이상 출금"}), 400
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT COALESCE(cash,0), COALESCE(game_cash,0), COALESCE(initial_withdraw,0) FROM users WHERE username=%s FOR UPDATE",
+            (auth_user,),
+        )
+        row = cursor.fetchone()
+        if not row:
+            cursor.close(); release_db(conn)
+            return jsonify({"error": "유저 없음"}), 400
+        bank, game, init_w = int(row[0] or 0), int(row[1] or 0), int(row[2] or 0)
+        if bank < amount:
+            cursor.close(); release_db(conn)
+            return jsonify({"error": "은행 잔고 부족"}), 400
+        bank2, game2 = bank - amount, game + amount
+        init2 = init_w + amount
+        cursor.execute(
+            "UPDATE users SET cash=%s, game_cash=%s, initial_withdraw=%s WHERE username=%s",
+            (bank2, game2, init2, auth_user),
+        )
+        log_transaction(cursor, auth_user, "출금", -amount, bank2, "은행→보유")
+        conn.commit()
+        cursor.close(); release_db(conn)
+        return jsonify({"success": True, "cash": bank2, "game_cash": game2, "initial_withdraw": init2})
+    except Exception as e:
+        print(f"withdraw error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/close_session", methods=["POST"])
+def api_close_session():
+    """게임 보유금 → 은행 마감"""
+    try:
+        auth_user, err = require_user()
+        if err:
+            return err
+        data = request.get_json(silent=True) or {}
+        # 클라이언트가 보낸 롤링 체크는 참고용, 서버 잔액 기준
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT COALESCE(cash,0), COALESCE(game_cash,0), COALESCE(initial_withdraw,0),
+                   COALESCE(current_rolling,0), COALESCE(total_profit,0), COALESCE(total_rolling,0)
+            FROM users WHERE username=%s FOR UPDATE
+            """,
+            (auth_user,),
+        )
+        row = cursor.fetchone()
+        if not row:
+            cursor.close(); release_db(conn)
+            return jsonify({"error": "유저 없음"}), 400
+        bank, game, init_w, cur_roll, tot_profit, tot_roll = [int(x or 0) for x in row]
+        if game <= 0:
+            cursor.close(); release_db(conn)
+            return jsonify({"error": "마감할 보유금이 없습니다."}), 400
+        # 티어 롤링 비율
+        tier = get_tier(tot_roll)
+        ratio = float(tier.get("roll_ratio") or 1.0)
+        need = int((init_w or 0) * ratio + 0.999999) if init_w else 0
+        # 클라이언트가 current_rolling을 보내면 더 큰 쪽 사용(조작 완화: 서버 값 우선하되 서버가 낮을 수 있음)
+        client_roll = data.get("current_rolling")
+        try:
+            client_roll = int(client_roll) if client_roll is not None else cur_roll
+        except (TypeError, ValueError):
+            client_roll = cur_roll
+        use_roll = max(cur_roll, min(client_roll, cur_roll + 50_000_000))
+        if need > 0 and use_roll < need:
+            cursor.close(); release_db(conn)
+            return jsonify({"error": f"롤링 미달 (₩{use_roll:,} / ₩{need:,})"}), 400
+        session_profit = game - init_w
+        bank2 = bank + game
+        tot_profit2 = tot_profit + session_profit
+        cursor.execute(
+            """
+            UPDATE users SET cash=%s, game_cash=0, initial_withdraw=0, current_rolling=0, total_profit=%s
+            WHERE username=%s
+            """,
+            (bank2, tot_profit2, auth_user),
+        )
+        log_transaction(cursor, auth_user, "마감", game, bank2, f"세션수익 {session_profit}")
+        conn.commit()
+        cursor.close(); release_db(conn)
+        return jsonify({
+            "success": True,
+            "cash": bank2,
+            "game_cash": 0,
+            "initial_withdraw": 0,
+            "current_rolling": 0,
+            "total_profit": tot_profit2,
+            "session_profit": session_profit,
+        })
+    except Exception as e:
+        print(f"close error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/admin/users", methods=["GET"])
 def admin_get_users():
     try:
+        auth_admin, err = require_admin()
+        if err:
+            return err
         pw = request.args.get("pw") or request.args.get("admin_user") or ""
-        if pw != "abcd051410":
-            return jsonify({"error": "Unauthorized"}), 403
 
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -819,14 +1016,14 @@ def admin_get_users():
 def admin_edit_user():
     """cash / game_cash 모두 설정 가능. 프론트에서 계산된 최종값을 보냄."""
     try:
+        auth_admin, err = require_admin()
+        if err:
+            return err
         data = request.json or {}
         pw = data.get("pw")
         username = data.get("username")
         new_cash = data.get("cash")
         new_game_cash = data.get("game_cash", None)
-
-        if (pw != "abcd051410") and (data.get("admin_user") != "abcd051410"):
-            return jsonify({"error": "Unauthorized"}), 401
         if not username:
             return jsonify({"error": "username required"}), 400
 
@@ -881,6 +1078,9 @@ def admin_edit_user():
 @app.route("/api/admin/delete", methods=["POST"])
 def admin_delete_user():
     try:
+        auth_admin, err = require_admin()
+        if err:
+            return err
         data = request.json or {}
         if data.get("pw") != "abcd051410" and data.get("admin_user") != "abcd051410":
             return jsonify({"error": "Unauthorized"}), 403
@@ -903,6 +1103,9 @@ def admin_send_notice():
     """관리자 공지 발송 → 전체 유저가 /api/notice 로 수신"""
     global CURRENT_NOTICE
     try:
+        auth_admin, err = require_admin()
+        if err:
+            return err
         data = request.json or {}
         if data.get("pw") != "abcd051410" and data.get("admin_user") != "abcd051410":
             return jsonify({"error": "Unauthorized"}), 403
@@ -955,7 +1158,7 @@ def delete_account():
         if not row:
             cursor.close(); release_db(conn)
             return jsonify({"error": "존재하지 않는 계정입니다."}), 400
-        if row[0] != password:
+        if not verify_password(password, row[0]):
             cursor.close(); release_db(conn)
             return jsonify({"error": "비밀번호가 일치하지 않습니다."}), 400
         cursor.execute("DELETE FROM users WHERE username = %s", (username,))
@@ -970,6 +1173,9 @@ def delete_account():
 @app.route("/api/admin/reset_ranking", methods=["POST"])
 def admin_reset_ranking():
     try:
+        auth_admin, err = require_admin()
+        if err:
+            return err
         data = request.json or {}
         admin_user = data.get("admin_user") or data.get("pw") or ""
         if admin_user != "abcd051410":
@@ -991,12 +1197,17 @@ def admin_reset_ranking():
 def transfer_money():
     """유저 간 은행 잔고 송금. 수수료 5%(최소 100원)는 관리자 계좌로."""
     try:
+        auth_user, err = require_user()
+        if err:
+            return err
         data = request.json or {}
         from_user = (data.get("from_user") or "").strip()
         to_user = (data.get("to_user") or "").strip()
         amount = data.get("amount")
         password = data.get("password") or ""
-        ADMIN = "abcd051410"
+        ADMIN = ADMIN_USER
+        if from_user != auth_user:
+            return jsonify({"error": "본인 계정으로만 송금할 수 있습니다."}), 403
 
         if not from_user or not to_user:
             return jsonify({"error": "송금 대상 아이디를 입력해주세요."}), 400
@@ -1023,7 +1234,7 @@ def transfer_money():
         if not row:
             cursor.close(); release_db(conn)
             return jsonify({"error": "보내는 계정이 없습니다."}), 400
-        if row[0] != password:
+        if not verify_password(password, row[0]):
             cursor.close(); release_db(conn)
             return jsonify({"error": "비밀번호가 일치하지 않습니다."}), 400
         from_bank = int(row[1] or 0)
@@ -1124,42 +1335,48 @@ def transfer_money():
 
 @app.route("/api/house_collect", methods=["POST"])
 def house_collect():
-    """하우 손익 반영. amount>0 유저 손실(관리자 입금), amount<0 유저 당첨(관리자 출금)"""
+    """하우 손익. 로그인 필수, 1회 한도, 관리자 잔고 반영."""
     try:
-        data = request.json or {}
+        auth_user, err = require_user()
+        if err:
+            return err
+        data = request.get_json(silent=True) or {}
         try:
             amount = int(data.get("amount", 0))
         except (TypeError, ValueError):
             amount = 0
         if amount == 0:
             return jsonify({"success": True, "skipped": True})
-        memo = (data.get("memo") or "").strip()
-        ADMIN = "abcd051410"
+        # 1회 최대 5천만 (어뷰징 완화)
+        if abs(amount) > 50_000_000:
+            return jsonify({"error": "한도 초과"}), 400
+        memo = (data.get("memo") or "").strip()[:200]
+        if auth_user not in memo and auth_user != ADMIN_USER:
+            memo = f"{memo} · {auth_user}".strip(" ·")
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT cash FROM users WHERE username = %s", (ADMIN,))
+        cursor.execute(
+            "SELECT COALESCE(cash,0) FROM users WHERE username=%s FOR UPDATE",
+            (ADMIN_USER,),
+        )
         row = cursor.fetchone()
         if not row:
             cursor.close(); release_db(conn)
-            return jsonify({"error": "admin not found"}), 400
-        prev = int(row[0] or 0)
-        new_cash = prev + amount
-        if new_cash < 0:
-            new_cash = 0
+            return jsonify({"error": "관리자 계좌 없음"}), 400
+        admin_cash = int(row[0] or 0)
+        # amount>0 유저 손실 → 관리자 +, amount<0 유저 당첨 → 관리자 -
+        new_admin = admin_cash + amount
+        if new_admin < 0:
+            new_admin = 0
         cursor.execute(
-            "UPDATE users SET cash = %s WHERE username = %s",
-            (new_cash, ADMIN),
+            "UPDATE users SET cash=%s WHERE username=%s",
+            (new_admin, ADMIN_USER),
         )
-        if amount > 0:
-            kind = "하우수익"
-            note = (memo + " · 유저 손실→하우 이득") if memo else "유저 손실·수수료 회수"
-        else:
-            kind = "하우지급"
-            note = (memo + " · 유저 당첨→하우 지출") if memo else "유저 당첨 지급"
-        log_transaction(cursor, ADMIN, kind, amount, new_cash, note)
+        kind = "하우수입" if amount > 0 else "하우지급"
+        log_transaction(cursor, ADMIN_USER, kind, amount, new_admin, memo or auth_user)
         conn.commit()
         cursor.close(); release_db(conn)
-        return jsonify({"success": True, "amount": amount, "admin_cash": new_cash})
+        return jsonify({"success": True, "admin_cash": new_admin})
     except Exception as e:
         print(f"House collect error: {e}")
         return jsonify({"error": str(e)}), 500
@@ -1168,9 +1385,14 @@ def house_collect():
 @app.route("/api/messages/send", methods=["POST"])
 def messages_send():
     try:
+        auth_user, err = require_user()
+        if err:
+            return err
         data = request.json or {}
         from_user = (data.get("from_user") or "").strip()
         to_user = (data.get("to_user") or "").strip()
+        if from_user != auth_user:
+            return jsonify({"error": "본인만 보낼 수 있습니다."}), 403
         body = (data.get("body") or "").strip()
         if not from_user or not to_user or not body:
             return jsonify({"error": "받는 사람과 내용을 입력해주세요."}), 400
@@ -1363,8 +1585,13 @@ def get_transactions():
 def attendance_check():
     """매일 1회 출석 시 은행 잔고 +200000"""
     try:
+        auth_user, err = require_user()
+        if err:
+            return err
         data = request.json or {}
         username = (data.get("username") or "").strip()
+        if username != auth_user:
+            return jsonify({"error": "본인만 출석할 수 있습니다."}), 403
         if not username:
             return jsonify({"error": "로그인이 필요합니다."}), 400
 
@@ -1415,9 +1642,10 @@ def attendance_check():
 def admin_bulk_pay():
     """모든 유저 은행 잔고에 동일 금액 지급"""
     try:
+        auth_admin, err = require_admin()
+        if err:
+            return err
         data = request.json or {}
-        if data.get("pw") != "abcd051410" and data.get("admin_user") != "abcd051410":
-            return jsonify({"error": "Unauthorized"}), 401
         try:
             amount = int(data.get("amount", 0))
         except (TypeError, ValueError):
@@ -1463,9 +1691,10 @@ def get_force_reload():
 def admin_force_reload():
     global FORCE_RELOAD
     try:
+        auth_admin, err = require_admin()
+        if err:
+            return err
         data = request.json or {}
-        if data.get("pw") != "abcd051410" and data.get("admin_user") != "abcd051410":
-            return jsonify({"error": "Unauthorized"}), 401
         msg = (data.get("message") or "서버가 갱신되었습니다. 잠시 후 새로고침됩니다.").strip()
         FORCE_RELOAD = {"id": int(FORCE_RELOAD.get("id", 0)) + 1, "message": msg}
         return jsonify({"success": True, **FORCE_RELOAD})
@@ -1486,9 +1715,10 @@ def get_difficulty():
 def admin_set_difficulty():
     global DIFFICULTY_CONFIG
     try:
+        auth_admin, err = require_admin()
+        if err:
+            return err
         data = request.json or {}
-        if data.get("pw") != "abcd051410" and data.get("admin_user") != "abcd051410":
-            return jsonify({"error": "Unauthorized"}), 401
         mode = (data.get("mode") or "").strip().lower()
         if mode not in DIFFICULTY_PRESETS:
             return jsonify({"error": "mode must be easy|normal|hard"}), 400
@@ -1502,9 +1732,10 @@ def admin_set_difficulty():
 @app.route("/api/admin/rename", methods=["POST"])
 def admin_rename():
     try:
+        auth_admin, err = require_admin()
+        if err:
+            return err
         data = request.json or {}
-        if data.get("pw") != "abcd051410" and data.get("admin_user") != "abcd051410":
-            return jsonify({"error": "Unauthorized"}), 401
         username = (data.get("username") or "").strip()
         new_name = (data.get("display_name") or data.get("name") or "").strip()
         if not username:
@@ -1534,9 +1765,10 @@ def admin_rename():
 def admin_suspend():
     """계정 일시정지 / 해제"""
     try:
+        auth_admin, err = require_admin()
+        if err:
+            return err
         data = request.json or {}
-        if data.get("pw") != "abcd051410" and data.get("admin_user") != "abcd051410":
-            return jsonify({"error": "Unauthorized"}), 401
         username = (data.get("username") or "").strip()
         suspend = bool(data.get("suspend", True))
         if not username:
