@@ -3073,6 +3073,7 @@
             document.getElementById('login-overlay').style.display = 'flex';
         setInterval(checkNotice, 30000);
         setInterval(refreshMyBalance, 25000);
+        setInterval(pollTransferDeposits, 12000);
         setInterval(pollUnreadBadge, 20000);
         setInterval(sendHeartbeat, 45000);
         sendHeartbeat();
@@ -3227,9 +3228,12 @@
             ab.style.display = (currentUser === 'abcd051410') ? 'block' : 'none';
         lastKnownBank = serverCash;
         lastKnownGame = cash;
+        lastSeenTxId = 0;
+        txPollReady = false;
         updateAttendanceBtn();
         pollUnreadBadge();
         sendHeartbeat();
+        pollTransferDeposits();
         updateUIValues();
         updateCloseButtonState();
         syncAllCashUI();
@@ -3341,10 +3345,11 @@
             alert('롤링 미달 (₩' + currentRolling.toLocaleString() + ' / ₩' + initialWithdraw.toLocaleString() + ')');
             return;
         }
-        if (!confirm('₩' + cash.toLocaleString() + '을 은행 잔고로 마감할까요?'))
+        const sessionProfit = Math.floor(cash - initialWithdraw);
+        const msg = '마감 금액 ₩' + Math.floor(cash).toLocaleString() + '\n첫 출금(누적) ₩' + Math.floor(initialWithdraw).toLocaleString() + '\n순이익 ₩' + sessionProfit.toLocaleString() + '\n\n은행 잔고로 마감할까요?';
+        if (!confirm(msg))
             return;
-        const sessionProfit = cash - initialWithdraw;
-        totalProfit += sessionProfit;
+        totalProfit = Math.floor((totalProfit || 0) + sessionProfit);
         serverCash += cash;
         cash = 0;
         initialWithdraw = 0;
@@ -5496,14 +5501,44 @@
             ov.style.display = 'none';
     }
     function watchDepositInflows(bank, game) {
-        if (lastKnownBank !== null && bank > lastKnownBank) {
-            showDepositAlarm(bank - lastKnownBank, '은행 잔고에 입금되었습니다');
-        }
-        if (lastKnownGame !== null && game > lastKnownGame) {
-            showDepositAlarm(game - lastKnownGame, '게임 머니가 충전되었습니다');
+        /* 관리자만 일반 입금 알람 유지 / 일반 유저는 송금 수신만 별도 폴링 */
+        if (currentUser === 'abcd051410') {
+            if (lastKnownBank !== null && bank > lastKnownBank) {
+                showDepositAlarm(bank - lastKnownBank, '은행 잔고에 입금되었습니다');
+            }
+            if (lastKnownGame !== null && game > lastKnownGame) {
+                showDepositAlarm(game - lastKnownGame, '게임 머니가 충전되었습니다');
+            }
         }
         lastKnownBank = bank;
         lastKnownGame = game;
+    }
+    let lastSeenTxId = 0,
+        txPollReady = false;
+    async function pollTransferDeposits() {
+        if (!currentUser)
+            return;
+        try {
+            const res = await fetch('/api/transactions?user=' + encodeURIComponent(currentUser) + '&limit=20');
+            if (!res.ok)
+                return;
+            const data = await res.json();
+            const items = data.items || [];
+            if (!items.length) {
+                txPollReady = true;
+                return;
+            }
+            const maxId = Math.max.apply(null, items.map(t => t.id || 0));
+            if (!txPollReady) {
+                lastSeenTxId = maxId;
+                txPollReady = true;
+                return;
+            }
+            items.filter(t => (t.id || 0) > lastSeenTxId && t.kind === '송금입금' && (t.amount || 0) > 0)
+            .sort((a, b) => (a.id || 0) - (b.id || 0))
+            .forEach(t => showDepositAlarm(t.amount, (t.memo || '송금 수신')));
+            lastSeenTxId = Math.max(lastSeenTxId, maxId);
+        } catch (e) {}
     }
     (function preventDoubleTapZoom() {
         document.addEventListener('gesturestart', function(e) {
@@ -5560,7 +5595,8 @@
             serverCash = data.cash != null ? data.cash : serverCash;
             lastAttendanceDate = data.last_attendance || '';
             lastKnownBank = serverCash;
-            showDepositAlarm(data.reward || 200000, '출석 보상 지급');
+            if (currentUser === 'abcd051410')
+                showDepositAlarm(data.reward || 200000, '출석 보상 지급');
             updateUIValues();
             syncAllCashUI();
             updateAttendanceBtn();
