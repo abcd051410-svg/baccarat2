@@ -34,6 +34,21 @@ DIFFICULTY_STATS = {
     "hard": {"house_net": 0},
 }
 
+# ===== 시즌 / 미션 (싱글플레이·비실시간) =====
+SEASON_CONFIG = {
+    "id": 1,
+    "name": "시즌 1",
+    "label": "ROYAL S1",
+}
+# 일일 미션 정의 (code, title, target, reward_cash)
+DAILY_MISSIONS = [
+    {"code": "attend", "title": "출석체크 1회", "target": 1, "reward": 50000},
+    {"code": "play_any", "title": "아무 게임 5회 플레이", "target": 5, "reward": 80000},
+    {"code": "play_bacc", "title": "바카라 3회", "target": 3, "reward": 60000},
+    {"code": "win_any", "title": "게임 1회 승리", "target": 1, "reward": 70000},
+    {"code": "transfer", "title": "송금 1회", "target": 1, "reward": 40000},
+]
+
 
 def hash_password(password: str) -> str:
     salt = secrets.token_hex(16)
@@ -133,6 +148,68 @@ def require_admin():
 
 # rank 높을수록 상위. 아이언4(최저) → ... → 챌린저(최고)
 # Iron~Diamond: 4가 낮고 1이 높음
+
+def kst_today():
+    kst = timezone(timedelta(hours=9))
+    return datetime.now(kst).strftime("%Y-%m-%d")
+
+
+def _load_mission_data(raw):
+    import json as _json
+    try:
+        d = _json.loads(raw or "{}")
+        if not isinstance(d, dict):
+            d = {}
+    except Exception:
+        d = {}
+    return d
+
+
+def _save_mission_data(cursor, username, data):
+    import json as _json
+    cursor.execute(
+        "UPDATE users SET mission_data=%s WHERE username=%s",
+        (_json.dumps(data, ensure_ascii=False), username),
+    )
+
+
+def title_for_tier(tier_name):
+    mapping = {
+        "챌린저": "전설의 도전자",
+        "그랜드마스터": "그랜드 마스터",
+        "마스터": "카지노 마스터",
+        "다이아1": "다이아몬드 엘리트",
+        "다이아2": "다이아 플레이어",
+        "다이아3": "다이아 플레이어",
+        "다이아4": "다이아 플레이어",
+        "에메랄드1": "에메랄드 고수",
+        "에메랄드2": "에메랄드",
+        "에메랄드3": "에메랄드",
+        "에메랄드4": "에메랄드",
+        "플래티넘1": "플래티넘 스타",
+        "플래티넘2": "플래티넘",
+        "플래티넘3": "플래티넘",
+        "플래티넘4": "플래티넘",
+        "골드1": "골든 핸드",
+        "골드2": "골드",
+        "골드3": "골드",
+        "골드4": "골드",
+        "실버1": "실버 라이저",
+        "실버2": "실버",
+        "실버3": "실버",
+        "실버4": "실버",
+        "브론즈1": "브론즈",
+        "브론즈2": "브론즈",
+        "브론즈3": "브론즈",
+        "브론즈4": "브론즈",
+        "아이언1": "뉴비 아이언",
+        "아이언2": "뉴비 아이언",
+        "아이언3": "뉴비 아이언",
+        "아이언4": "뉴비 아이언",
+    }
+    return mapping.get(tier_name or "", "로얄 멤버")
+
+
 TIER_TABLE = [
     # min_rolling, name, badge, fee_rate, attend, max_bet_mult, roll_ratio, rank
     (2_000_000_000, "챌린저",   "🏆", 0.008, 350000, 8.0, 0.40, 31),
@@ -202,6 +279,12 @@ def ensure_user_columns(cursor, conn=None):
         ("total_profit", "BIGINT DEFAULT 0"),
         ("last_seen", "DOUBLE PRECISION DEFAULT 0"),
         ("suspended", "BOOLEAN DEFAULT FALSE"),
+        ("profile_title", "VARCHAR(40) DEFAULT ''"),
+        ("daily_loss", "BIGINT DEFAULT 0"),
+        ("daily_loss_date", "VARCHAR(20) DEFAULT ''"),
+        ("self_excluded", "BOOLEAN DEFAULT FALSE"),
+        ("season_points", "BIGINT DEFAULT 0"),
+        ("mission_data", "TEXT DEFAULT '{}'"),
     ]
     for col, typedef in cols:
         try:
@@ -310,6 +393,12 @@ def init_db():
             ("total_profit", "BIGINT DEFAULT 0"),
             ("last_seen", "DOUBLE PRECISION DEFAULT 0"),
             ("suspended", "BOOLEAN DEFAULT FALSE"),
+            ("profile_title", "VARCHAR(40) DEFAULT ''"),
+            ("daily_loss", "BIGINT DEFAULT 0"),
+            ("daily_loss_date", "VARCHAR(20) DEFAULT ''"),
+            ("self_excluded", "BOOLEAN DEFAULT FALSE"),
+            ("season_points", "BIGINT DEFAULT 0"),
+            ("mission_data", "TEXT DEFAULT '{}'"),
         ]:
             try:
                 cursor.execute(f"ALTER TABLE users ADD COLUMN IF NOT EXISTS {col} {typedef}")
@@ -1096,13 +1185,25 @@ def api_close_session():
         session_profit = game - init_w
         bank2 = bank + game
         tot_profit2 = tot_profit + session_profit
-        cursor.execute(
-            """
-            UPDATE users SET cash=%s, game_cash=0, initial_withdraw=0, current_rolling=0, total_profit=%s, last_seen=%s
-            WHERE username=%s
-            """,
-            (bank2, tot_profit2, time.time(), auth_user),
-        )
+        # 시즌 포인트: 세션 수익이 양수일 때만 가산
+        season_add = max(0, int(session_profit))
+        try:
+            cursor.execute(
+                """
+                UPDATE users SET cash=%s, game_cash=0, initial_withdraw=0, current_rolling=0, total_profit=%s,
+                    season_points = COALESCE(season_points,0) + %s, last_seen=%s
+                WHERE username=%s
+                """,
+                (bank2, tot_profit2, season_add, time.time(), auth_user),
+            )
+        except Exception:
+            cursor.execute(
+                """
+                UPDATE users SET cash=%s, game_cash=0, initial_withdraw=0, current_rolling=0, total_profit=%s, last_seen=%s
+                WHERE username=%s
+                """,
+                (bank2, tot_profit2, time.time(), auth_user),
+            )
         log_transaction(cursor, auth_user, "마감", game, bank2, f"세션수익 {session_profit}")
         conn.commit()
         cursor.close(); release_db(conn)
@@ -2254,6 +2355,366 @@ def admin_bulk_set_assets():
     except Exception as e:
         print(f"bulk_set_assets error: {e}")
         return jsonify({"error": str(e)}), 500
+
+
+
+@app.route("/api/missions", methods=["GET"])
+def get_missions():
+    """일일 미션 목록 + 진행도"""
+    try:
+        username = (request.args.get("user") or "").strip()
+        if not username:
+            return jsonify({"error": "user required"}), 400
+        today = kst_today()
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                "SELECT COALESCE(mission_data,''), COALESCE(last_attendance,''), COALESCE(cash,0) FROM users WHERE username=%s",
+                (username,),
+            )
+        except Exception:
+            conn.rollback()
+            ensure_user_columns(cursor, conn)
+            cursor.execute(
+                "SELECT COALESCE(mission_data,''), COALESCE(last_attendance,''), COALESCE(cash,0) FROM users WHERE username=%s",
+                (username,),
+            )
+        row = cursor.fetchone()
+        if not row:
+            cursor.close(); release_db(conn)
+            return jsonify({"error": "유저 없음"}), 400
+        data = _load_mission_data(row[0])
+        if data.get("date") != today:
+            data = {"date": today, "progress": {}, "claimed": []}
+            _save_mission_data(cursor, username, data)
+            conn.commit()
+        # auto progress attend
+        prog = data.setdefault("progress", {})
+        if (row[1] or "") == today:
+            prog["attend"] = max(int(prog.get("attend") or 0), 1)
+            data["progress"] = prog
+            _save_mission_data(cursor, username, data)
+            conn.commit()
+        claimed = set(data.get("claimed") or [])
+        items = []
+        for m in DAILY_MISSIONS:
+            cur = int(prog.get(m["code"]) or 0)
+            items.append({
+                **m,
+                "progress": cur,
+                "done": cur >= m["target"],
+                "claimed": m["code"] in claimed,
+            })
+        cursor.close(); release_db(conn)
+        return jsonify({"date": today, "missions": items, "season": SEASON_CONFIG})
+    except Exception as e:
+        print(f"missions error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/missions/event", methods=["POST"])
+def mission_event():
+    """게임/행동 이벤트 → 미션 진행도 증가"""
+    try:
+        data = request.get_json(silent=True) or {}
+        username = (data.get("username") or "").strip()
+        event = (data.get("event") or "").strip()
+        if not username or not event:
+            return jsonify({"error": "username/event 필요"}), 400
+        today = kst_today()
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("SELECT COALESCE(mission_data,'') FROM users WHERE username=%s FOR UPDATE", (username,))
+        except Exception:
+            conn.rollback()
+            ensure_user_columns(cursor, conn)
+            cursor.execute("SELECT COALESCE(mission_data,'') FROM users WHERE username=%s FOR UPDATE", (username,))
+        row = cursor.fetchone()
+        if not row:
+            cursor.close(); release_db(conn)
+            return jsonify({"error": "유저 없음"}), 400
+        md = _load_mission_data(row[0])
+        if md.get("date") != today:
+            md = {"date": today, "progress": {}, "claimed": []}
+        prog = md.setdefault("progress", {})
+        # map events
+        inc = {}
+        if event in ("play_any", "play_baccarat", "play_dragontiger", "play_highlow", "play_roulette",
+                     "play_blackjack", "play_slot", "play_dice", "play_crash", "play_plinko",
+                     "play_stock", "play_poker"):
+            inc["play_any"] = 1
+            if event == "play_baccarat":
+                inc["play_bacc"] = 1
+            elif event.startswith("play_"):
+                pass
+        if event == "win_any":
+            inc["win_any"] = 1
+        if event == "transfer":
+            inc["transfer"] = 1
+        if event == "attend":
+            inc["attend"] = 1
+        for k, v in inc.items():
+            prog[k] = int(prog.get(k) or 0) + int(v)
+        md["progress"] = prog
+        _save_mission_data(cursor, username, md)
+        conn.commit()
+        cursor.close(); release_db(conn)
+        return jsonify({"success": True, "progress": prog})
+    except Exception as e:
+        print(f"mission event error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/missions/claim", methods=["POST"])
+def mission_claim():
+    try:
+        data = request.get_json(silent=True) or {}
+        username = (data.get("username") or "").strip()
+        code = (data.get("code") or "").strip()
+        if not username or not code:
+            return jsonify({"error": "username/code 필요"}), 400
+        mission = next((m for m in DAILY_MISSIONS if m["code"] == code), None)
+        if not mission:
+            return jsonify({"error": "없는 미션"}), 400
+        today = kst_today()
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT COALESCE(mission_data,''), COALESCE(cash,0) FROM users WHERE username=%s FOR UPDATE",
+            (username,),
+        )
+        row = cursor.fetchone()
+        if not row:
+            cursor.close(); release_db(conn)
+            return jsonify({"error": "유저 없음"}), 400
+        md = _load_mission_data(row[0])
+        if md.get("date") != today:
+            md = {"date": today, "progress": {}, "claimed": []}
+        prog = md.get("progress") or {}
+        claimed = list(md.get("claimed") or [])
+        if code in claimed:
+            cursor.close(); release_db(conn)
+            return jsonify({"error": "이미 수령함"}), 400
+        if int(prog.get(code) or 0) < mission["target"]:
+            cursor.close(); release_db(conn)
+            return jsonify({"error": "미션 미완료"}), 400
+        reward = int(mission["reward"])
+        new_cash = int(row[1] or 0) + reward
+        claimed.append(code)
+        md["claimed"] = claimed
+        cursor.execute("UPDATE users SET cash=%s WHERE username=%s", (new_cash, username))
+        _save_mission_data(cursor, username, md)
+        log_transaction(cursor, username, "미션보상", reward, new_cash, mission["title"])
+        conn.commit()
+        cursor.close(); release_db(conn)
+        return jsonify({"success": True, "reward": reward, "cash": new_cash, "code": code})
+    except Exception as e:
+        print(f"mission claim error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/safety", methods=["GET"])
+def get_safety():
+    try:
+        username = (request.args.get("user") or "").strip()
+        if not username:
+            return jsonify({"error": "user required"}), 400
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                """
+                SELECT COALESCE(daily_loss,0), COALESCE(daily_loss_date,''), COALESCE(self_excluded,FALSE),
+                       COALESCE(profile_title,''), COALESCE(season_points,0), COALESCE(total_rolling,0)
+                FROM users WHERE username=%s
+                """,
+                (username,),
+            )
+        except Exception:
+            conn.rollback()
+            ensure_user_columns(cursor, conn)
+            cursor.execute(
+                """
+                SELECT COALESCE(daily_loss,0), COALESCE(daily_loss_date,''), COALESCE(self_excluded,FALSE),
+                       COALESCE(profile_title,''), COALESCE(season_points,0), COALESCE(total_rolling,0)
+                FROM users WHERE username=%s
+                """,
+                (username,),
+            )
+        row = cursor.fetchone()
+        cursor.close(); release_db(conn)
+        if not row:
+            return jsonify({"error": "유저 없음"}), 400
+        today = kst_today()
+        daily_loss = int(row[0] or 0) if (row[1] or "") == today else 0
+        tier = get_tier(row[5] or 0)
+        title = (row[3] or "").strip() or title_for_tier(tier.get("name"))
+        return jsonify({
+            "daily_loss": daily_loss,
+            "daily_loss_date": row[1] or "",
+            "self_excluded": bool(row[2]),
+            "profile_title": title,
+            "season_points": int(row[4] or 0),
+            "season": SEASON_CONFIG,
+            "daily_loss_limit": 5_000_000,
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/safety/loss", methods=["POST"])
+def safety_add_loss():
+    """세션 손실 누적 (일일 한도용)"""
+    try:
+        data = request.get_json(silent=True) or {}
+        username = (data.get("username") or "").strip()
+        try:
+            amount = int(data.get("amount") or 0)
+        except (TypeError, ValueError):
+            amount = 0
+        if not username or amount <= 0:
+            return jsonify({"success": True, "skipped": True})
+        today = kst_today()
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                "SELECT COALESCE(daily_loss,0), COALESCE(daily_loss_date,''), COALESCE(self_excluded,FALSE) FROM users WHERE username=%s FOR UPDATE",
+                (username,),
+            )
+        except Exception:
+            conn.rollback()
+            ensure_user_columns(cursor, conn)
+            cursor.execute(
+                "SELECT COALESCE(daily_loss,0), COALESCE(daily_loss_date,''), COALESCE(self_excluded,FALSE) FROM users WHERE username=%s FOR UPDATE",
+                (username,),
+            )
+        row = cursor.fetchone()
+        if not row:
+            cursor.close(); release_db(conn)
+            return jsonify({"error": "유저 없음"}), 400
+        if bool(row[2]):
+            cursor.close(); release_db(conn)
+            return jsonify({"error": "자기보호 모드입니다. 잠시 휴식이 필요합니다."}), 403
+        loss = int(row[0] or 0) if (row[1] or "") == today else 0
+        loss += amount
+        cursor.execute(
+            "UPDATE users SET daily_loss=%s, daily_loss_date=%s WHERE username=%s",
+            (loss, today, username),
+        )
+        conn.commit()
+        cursor.close(); release_db(conn)
+        limit = 5_000_000
+        return jsonify({"success": True, "daily_loss": loss, "limit": limit, "blocked": loss >= limit})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/safety/exclude", methods=["POST"])
+def safety_self_exclude():
+    try:
+        data = request.get_json(silent=True) or {}
+        username = (data.get("username") or "").strip()
+        exclude = bool(data.get("exclude", True))
+        if not username:
+            return jsonify({"error": "username 필요"}), 400
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("UPDATE users SET self_excluded=%s WHERE username=%s", (exclude, username))
+        except Exception:
+            conn.rollback()
+            ensure_user_columns(cursor, conn)
+            cursor.execute("UPDATE users SET self_excluded=%s WHERE username=%s", (exclude, username))
+        conn.commit()
+        cursor.close(); release_db(conn)
+        return jsonify({"success": True, "self_excluded": exclude})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/season/ranking", methods=["GET"])
+def season_ranking():
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                """
+                SELECT username, COALESCE(display_name,''), COALESCE(season_points,0),
+                       COALESCE(total_rolling,0), COALESCE(cash,0), COALESCE(game_cash,0), COALESCE(last_seen,0)
+                FROM users ORDER BY season_points DESC, total_rolling DESC LIMIT 100
+                """
+            )
+        except Exception:
+            conn.rollback()
+            ensure_user_columns(cursor, conn)
+            cursor.execute(
+                """
+                SELECT username, COALESCE(display_name,''), COALESCE(season_points,0),
+                       COALESCE(total_rolling,0), COALESCE(cash,0), COALESCE(game_cash,0), COALESCE(last_seen,0)
+                FROM users ORDER BY season_points DESC, total_rolling DESC LIMIT 100
+                """
+            )
+        rows = cursor.fetchall()
+        cursor.close(); release_db(conn)
+        now = time.time()
+        users = []
+        for r in rows:
+            users.append({
+                "username": r[0],
+                "display_name": r[1] or r[0],
+                "season_points": int(r[2] or 0),
+                "total_rolling": int(r[3] or 0),
+                "cash": int(r[4] or 0),
+                "game_cash": int(r[5] or 0),
+                "last_seen": float(r[6] or 0),
+                "online": (now - float(r[6] or 0)) < 90 if r[6] else False,
+                "tier": get_tier(r[3] or 0),
+            })
+        return jsonify({"season": SEASON_CONFIG, "users": users})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/admin/dashboard", methods=["GET"])
+def admin_dashboard():
+    try:
+        auth_admin, err = require_admin()
+        if err:
+            return err
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM users")
+        total_users = int((cursor.fetchone() or [0])[0] or 0)
+        cursor.execute("SELECT COALESCE(SUM(cash),0), COALESCE(SUM(game_cash),0), COALESCE(SUM(total_rolling),0), COALESCE(SUM(total_profit),0) FROM users")
+        sums = cursor.fetchone() or (0, 0, 0, 0)
+        now = time.time()
+        try:
+            cursor.execute("SELECT COUNT(*) FROM users WHERE last_seen > %s", (now - 90,))
+            online = int((cursor.fetchone() or [0])[0] or 0)
+        except Exception:
+            online = 0
+        cursor.execute("SELECT COALESCE(cash,0) FROM users WHERE username=%s", (ADMIN_USER,))
+        admin_cash = int((cursor.fetchone() or [0])[0] or 0)
+        cursor.close(); release_db(conn)
+        return jsonify({
+            "total_users": total_users,
+            "online": online,
+            "sum_bank": int(sums[0] or 0),
+            "sum_game": int(sums[1] or 0),
+            "sum_rolling": int(sums[2] or 0),
+            "sum_profit": int(sums[3] or 0),
+            "admin_cash": admin_cash,
+            "difficulty": DIFFICULTY_CONFIG,
+            "stats": {k: {"house_net": int(v.get("house_net", 0))} for k, v in DIFFICULTY_STATS.items()},
+            "season": SEASON_CONFIG,
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 
 
 if __name__ == "__main__":
