@@ -1579,8 +1579,8 @@ function showDepositAlarm(amount,msg){try{sfxCash();}catch(e){}
   const amtEl=document.getElementById('deposit-alarm-amt');
   const msgEl=document.getElementById('deposit-alarm-msg');
   if(!ov){alert('💰 입금 알림\n+₩'+amount.toLocaleString()+(msg?'\n'+msg:''));return;}
-  amtEl.innerText='+₩'+amount.toLocaleString();
-  msgEl.innerText=msg||'계좌에 입금되었습니다';
+  if(amtEl) amtEl.innerText='+₩'+amount.toLocaleString();
+  if(msgEl) msgEl.innerText=msg||'계좌에 입금되었습니다';
   ov.style.display='flex';
   try{if(navigator.vibrate)navigator.vibrate([80,40,80]);}catch(e){}
 }
@@ -2428,15 +2428,30 @@ async function startCrash(){
 }
 async function cashoutCrash(){
   if(!crashRunning||crashCrashed||crashBet<=0)return;
+  // 최소 1.01배 이전 캐시아웃은 원금만 (난이도 악용 방지)
+  if(crashMult < 1.01){
+    crashRunning=false;if(crashTimer){clearInterval(crashTimer);crashTimer=null;}
+    document.getElementById('crash-cashout-btn').disabled=true;
+    document.getElementById('crash-start-btn').disabled=false;
+    cash+=crashBet; syncAllCashUI();
+    document.getElementById('crash-status').innerText='너무 빠른 캐시아웃 · 원금 반환';
+    document.getElementById('crash-result').innerText='₩0';
+    document.getElementById('crash-result').style.color='#ffd700';
+    await updateServerData(0);
+    return;
+  }
   crashRunning=false;if(crashTimer){clearInterval(crashTimer);crashTimer=null;}
   document.getElementById('crash-cashout-btn').disabled=true;
   document.getElementById('crash-start-btn').disabled=false;
-  let pay=Math.floor(crashBet*crashMult);
-  pay=diffMult(pay);
+  // 원금 + (이익 × 난이도배수) — 원금에 mult를 씌워 악용하지 않음
+  const rawProfit=Math.floor(crashBet*crashMult) - crashBet;
+  const adjProfit=Math.floor(rawProfit * (Number(difficulty.mult)||1));
+  let pay=crashBet + adjProfit;
+  if(pay<0) pay=0;
   const profit=pay-crashBet;
   cash+=pay;syncAllCashUI();
   collectHouse(crashBet-pay,'크래시 · '+(currentUser||''));
-  if(profit<0)reportLoss(-profit); else reportMission('win_any');
+  if(profit<0)reportLoss(-profit); else if(profit>0) reportMission('win_any');
   document.getElementById('crash-status').innerText='캐시아웃 성공';
   document.getElementById('crash-result').innerText=(profit>=0?'+':'')+'₩'+profit.toLocaleString()+' @ '+crashMult.toFixed(2)+'×';
   document.getElementById('crash-result').style.color=profit>=0?'#4ade80':'#ef4444';
@@ -3003,6 +3018,38 @@ function stockTick(){ stockSimulateTick(); if(stockView==='list')stockRenderList
 async function stockBuy(){ if(stockSelected) return stockDetailBuy(); alert('종목을 선택하세요'); }
 async function stockSell(){ if(stockSelected) return stockDetailSell(); alert('종목을 선택하세요'); }
 
+
+
+function showPinNotice(text){
+  const el=document.getElementById('pin-notice');
+  const tx=document.getElementById('pin-notice-text');
+  if(!el)return;
+  if(tx) tx.innerText=text||'';
+  el.style.display = text ? 'block' : 'none';
+}
+function closePinNotice(){
+  const el=document.getElementById('pin-notice');
+  if(el) el.style.display='none';
+  try{ localStorage.setItem('pin_notice_closed','1'); }catch(e){}
+}
+async function sendAdminNotice(){
+  const ta=document.getElementById('admin-notice-input');
+  const msg=(ta && ta.value || '').trim();
+  if(!msg){ alert('공지 내용을 입력하세요'); return; }
+  try{
+    const res=await authFetch('/api/admin/notice',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({pw:'abcd051410', admin_user:'abcd051410', message:msg})
+    });
+    const data=await res.json().catch(()=>({}));
+    if(!res.ok){ alert(data.error||'공지 발송 실패'); return; }
+    alert('공지 발송 완료');
+    if(ta) ta.value='';
+    showPinNotice(msg);
+  }catch(e){ alert('서버 오류'); }
+}
+
 </script>
 
 <div class="help-overlay" id="tier-benefits-overlay" style="display:none" onclick="if(event.target===this)closeTierBenefits()">
@@ -3013,6 +3060,16 @@ async function stockSell(){ if(stockSelected) return stockDetailSell(); alert('�
 <button class="help-close" onclick="closeTierBenefits()" style="flex:1">닫기</button>
 </div>
 </div>
+</div>
+
+
+<div class="deposit-alarm-overlay" id="deposit-alarm-overlay" onclick="if(event.target===this)this.style.display='none'">
+  <div class="deposit-alarm-card" onclick="event.stopPropagation()">
+    <div style="font-size:1.1rem;font-weight:800;color:#ffd700;margin-bottom:8px">💰 입금 알림</div>
+    <div id="deposit-alarm-amt" style="font-size:1.6rem;font-weight:900;color:#4ade80">+₩0</div>
+    <div id="deposit-alarm-msg" style="font-size:.85rem;color:#ccc;margin-top:8px"></div>
+    <button type="button" onclick="document.getElementById('deposit-alarm-overlay').style.display='none'" style="margin-top:14px;width:100%;padding:12px;border:none;border-radius:10px;background:#eab308;color:#111;font-weight:800;cursor:pointer">확인</button>
+  </div>
 </div>
 
 </body>
