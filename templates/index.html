@@ -878,6 +878,30 @@ function createBJDeck(){
   return createDeck();
 }
 
+/** 용호/비교용 랭크 (A=14) */
+function rankValueFull(card){
+  if(!card) return 0;
+  const n = card.name || card.n;
+  if(n==='A') return 14;
+  if(n==='K') return 13;
+  if(n==='Q') return 12;
+  if(n==='J') return 11;
+  const v = parseInt(n, 10);
+  if(!isNaN(v)) return v;
+  return Number(card.val)||0;
+}
+function rankValue(card){ return rankValueFull(card); }
+/** 용호 배수 추첨 */
+function rollDTMultiplier(){
+  const r = Math.random();
+  if(r < 0.55) return 2;
+  if(r < 0.78) return 3;
+  if(r < 0.90) return 4;
+  if(r < 0.97) return 5;
+  return 8;
+}
+
+
 /** 바카라 점수 (일의 자리) */
 function getScore(hand){
   if(!hand||!hand.length) return 0;
@@ -997,7 +1021,7 @@ function showDisclaimerIfNeeded(){const u=localStorage.getItem('disclaimer_hide_
 function closeDisclaimer(h){if(h)localStorage.setItem('disclaimer_hide_until',String(Date.now()+3*864e5));document.getElementById('disclaimer-overlay').style.display='none';}
 async function checkNotice(){try{const res=await fetch('/api/notice');if(!res.ok)return;const d=await res.json();if(d&&d.id&&d.id!==lastSeenNoticeId&&d.message){document.getElementById('notice-body-text').innerText=d.message;document.getElementById('notice-overlay').style.display='flex';lastSeenNoticeId=d.id;localStorage.setItem('last_seen_notice_id',d.id);}}catch(e){}}
 function closeNoticePopup(){document.getElementById('notice-overlay').style.display='none';}
-function goToScreen(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active');toggleSidebar(false);syncAllCashUI();}
+function goToScreen(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));const el=document.getElementById(id);if(el)el.classList.add('active');try{toggleSidebar(false);}catch(e){}try{syncAllCashUI();}catch(e){}}
 function enterGame(g){if(checkSuspendedGate())return;if(checkSafetyGate())return;currentGame=g;const hb=document.getElementById('floating-help-btn');if(hb)hb.style.display='block';setTimeout(()=>showHelpFor(g),300);if(g==='baccarat'){goToScreen('screen-baccarat');baccaratLoopRunning=false;setTimeout(function(){if(currentGame!=='baccarat')return;baccaratLoopRunning=true;initBigRoadGrid('big-road-grid');roadMatrix={};lastWinner=null;currentCol=0;currentRow=0;generateRandomHistory('baccarat');startLiveLoop();},30);}else if(g==='dragontiger'){goToScreen('screen-dragontiger');dtLoopRunning=false;setTimeout(function(){if(currentGame!=='dragontiger')return;dtLoopRunning=true;initBigRoadGrid('dt-road-grid');roadMatrixDT={};lastWinnerDT=null;currentColDT=0;currentRowDT=0;generateRandomHistory('dragontiger');startLiveLoopDT();},30);}else if(g==='highlow'){goToScreen('screen-highlow');resetHighLowUI();}else if(g==='roulette')goToScreen('screen-roulette');else if(g==='blackjack'){goToScreen('screen-blackjack');resetBJ();}else if(g==='slot')goToScreen('screen-slot');else if(g==='dice')goToScreen('screen-dice');else if(g==='crash'){goToScreen('screen-crash');resetCrash();}else if(g==='plinko'){goToScreen('screen-plinko');initPlinkoSlots();}else if(g==='stock'){goToScreen('screen-stock');stockEnter();}else if(g==='poker'){goToScreen('screen-poker');resetPoker();}refreshChipBars();syncAllCashUI();if(typeof cash==='number'&&cash<=0){setTimeout(function(){alert('보유금이 없습니다. 메뉴에서 은행 잔고를 출금한 뒤 플레이하세요.');},200);}}
 function exitToLobby(){currentGame=null;const hb=document.getElementById('floating-help-btn');if(hb)hb.style.display='none';goToScreen('screen-lobby');baccaratLoopRunning=false;dtLoopRunning=false;isBettingOpen=false;isBettingOpenDT=false;}
 function syncAllCashUI(){['bank-cash-val','cash-val','lobby-cash-val','dt-cash-val','hl-cash-val','rl-cash-val','bj-cash-val','slot-cash-val','dice-cash-val','crash-cash-val','plinko-cash-val','stock-cash-val','poker-cash-val'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerText=Math.floor(id==='bank-cash-val'?serverCash:cash).toLocaleString();});}
@@ -1027,7 +1051,7 @@ function handleLogout(){if(confirm('로그아웃 하시겠습니까?')){localSto
 async function processWithdraw(){if(checkSuspendedGate())return;const amt=parseInt(document.getElementById('withdraw-input-amt').value,10);if(isNaN(amt)||amt<=0){alert('올바른 금액을 입력해주세요.');return;}if(amt>serverCash){alert('잔고가 부족합니다.');return;}try{const res=await fetch('/api/withdraw',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:currentUser,amount:amt})});let data={};try{data=await res.json();}catch(e){alert('서버 응답 오류');return;}if(!res.ok){alert(data.error||'출금 실패');return;}serverCash=Math.floor(data.cash||0);cash=Math.floor(data.game_cash||0);if(data.initial_withdraw!=null)initialWithdraw=Math.floor(data.initial_withdraw);document.getElementById('withdraw-input-amt').value='';updateUIValues();updateCloseButtonState();syncAllCashUI();alert('₩'+amt.toLocaleString()+' 출금 완료');toggleSidebar(false);}catch(e){alert('서버 통신 오류');}}
 async function handleCloseGame(){if(cash<=0){alert('마감할 보유금이 없습니다.');return;}const rollNeed=getTierRollNeed();if(currentRolling<rollNeed){alert('롤링 미달 (₩'+currentRolling.toLocaleString()+' / ₩'+rollNeed.toLocaleString()+' · 티어 '+(Math.round(getTierInfo(totalRolling).rollRatio*100))+'%)');return;}const sessionProfit=Math.floor(cash-initialWithdraw);if(!confirm('마감 금액 ₩'+Math.floor(cash).toLocaleString()+' / 순이익 ₩'+sessionProfit.toLocaleString()+'\n은행 잔고로 마감할까요?'))return;try{const res=await fetch('/api/close_session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:currentUser,current_rolling:currentRolling})});let data={};try{data=await res.json();}catch(e){alert('서버 응답 오류');return;}if(!res.ok){alert(data.error||'마감 실패');return;}serverCash=Math.floor(data.cash||0);cash=0;initialWithdraw=0;currentRolling=0;if(data.total_profit!=null)totalProfit=Math.floor(data.total_profit);updateUIValues();updateCloseButtonState();syncAllCashUI();alert('마감 완료 (세션 수익: ₩'+Math.floor(data.session_profit!=null?data.session_profit:sessionProfit).toLocaleString()+')');}catch(e){alert('서버 통신 오류');}}
 function updateCloseButtonState(){const need=getTierRollNeed();document.querySelectorAll('.close-btn').forEach(b=>{b.disabled=initialWithdraw>0&&currentRolling<need;});}
-function updateUIValues(){updateTierUI();document.getElementById('bank-cash-val').innerText=Math.floor(serverCash).toLocaleString();document.getElementById('rolling-progress-val').innerText=Math.floor(currentRolling).toLocaleString();const _rt=document.getElementById('rolling-target-val');if(_rt)_rt.innerText=Math.floor(getTierRollNeed()).toLocaleString();syncAllCashUI();}
+function updateUIValues(){try{updateTierUI();}catch(e){}const bc=document.getElementById('bank-cash-val');if(bc)bc.innerText=Math.floor(serverCash||0).toLocaleString();const rp=document.getElementById('rolling-progress-val');if(rp)rp.innerText=Math.floor(currentRolling||0).toLocaleString();const _rt=document.getElementById('rolling-target-val');if(_rt)_rt.innerText=Math.floor(getTierRollNeed()).toLocaleString();try{syncAllCashUI();}catch(e){}}
 let _lastUpdatePayload='';
 let _updateInFlight=false;
 let _updateQueued=null;
