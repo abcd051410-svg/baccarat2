@@ -70,6 +70,33 @@ def get_tier(rolling):
 
 
 
+
+def ensure_user_columns(cursor, conn=None):
+    """누락 컬럼 보정 — 로그인 실패 방지"""
+    cols = [
+        ("display_name", "VARCHAR(50) DEFAULT ''"),
+        ("total_profit", "BIGINT DEFAULT 0"),
+        ("last_seen", "DOUBLE PRECISION DEFAULT 0"),
+        ("suspended", "BOOLEAN DEFAULT FALSE"),
+    ]
+    for col, typedef in cols:
+        try:
+            cursor.execute(f"ALTER TABLE users ADD COLUMN IF NOT EXISTS {col} {typedef}")
+        except Exception:
+            try:
+                cursor.execute(f"ALTER TABLE users ADD COLUMN {col} {typedef}")
+            except Exception:
+                pass
+    if conn is not None:
+        try:
+            conn.commit()
+        except Exception:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+
+
 def get_db_connection():
     if not DATABASE_URL:
         raise ValueError("DATABASE_URL 환경 변수가 설정되지 않았습니다!")
@@ -194,6 +221,7 @@ def init_db():
         conn.commit()
         cursor.close()
         conn.close()
+        ensure_user_columns(cursor, conn)
         print("Database initialized successfully!")
     except Exception as e:
         print(f"Database initialization error details: {e}")
@@ -302,18 +330,47 @@ def _gen_dt_round():
     }
 
 
+def _gen_history(game, n=None):
+    """플레이어 없을 때 보여줄 초기 로드맵 기록"""
+    if n is None:
+        n = random.randint(28, 40)
+    hist = []
+    for _ in range(n):
+        r = random.random()
+        if game == "baccarat":
+            if r > 0.88:
+                res = "TIE"
+            elif r > 0.48:
+                res = "BANKER"
+            else:
+                res = "PLAYER"
+        else:
+            if r > 0.90:
+                res = "TIE"
+            elif r > 0.45:
+                res = "TIGER"
+            else:
+                res = "DRAGON"
+        hist.append(res)
+    return hist
+
+
 TABLES = {
     "baccarat": {
         "round_id": 1,
         "phase": "betting",
         "phase_end": 0.0,
         "payload": None,
+        "history": [],
+        "history_seeded": False,
     },
     "dragontiger": {
         "round_id": 1,
         "phase": "betting",
         "phase_end": 0.0,
         "payload": None,
+        "history": [],
+        "history_seeded": False,
     },
 }
 
@@ -325,12 +382,14 @@ RESULT_SEC = 4
 def _ensure_table(game):
     now = time.time()
     t = TABLES[game]
+    if not t.get("history_seeded"):
+        t["history"] = _gen_history(game)
+        t["history_seeded"] = True
     if t["phase_end"] <= 0:
         t["phase"] = "betting"
         t["phase_end"] = now + BETTING_SEC
         t["payload"] = None
         return t
-    # advance as needed
     guard = 0
     while now >= t["phase_end"] and guard < 10:
         guard += 1
@@ -341,6 +400,13 @@ def _ensure_table(game):
         elif t["phase"] == "playing":
             t["phase"] = "result"
             t["phase_end"] = now + RESULT_SEC
+            # 라운드 결과를 공유 기록에 추가
+            payload = t.get("payload") or {}
+            res = payload.get("result")
+            if res:
+                t.setdefault("history", []).append(res)
+                if len(t["history"]) > 80:
+                    t["history"] = t["history"][-80:]
         else:
             t["round_id"] += 1
             t["phase"] = "betting"
@@ -366,6 +432,8 @@ def table_state():
         "phase_end": t["phase_end"],
         "server_now": now,
         "payload": t["payload"],
+        "history": t.get("history") or [],
+        "history_len": len(t.get("history") or []),
     })
 
 
@@ -427,35 +495,55 @@ def login():
 
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute(
-            """
-            SELECT password, cash, game_cash, total_rolling, initial_withdraw,
-                   current_rolling, profit_rate, last_attendance,
-                   COALESCE(display_name, ''), COALESCE(total_profit, 0),
-                   COALESCE(suspended, FALSE)
-            FROM users WHERE username = %s
-            """,
-            (username,),
-        )
-        row = cursor.fetchone()
+        ensure_user_columns(cursor, conn)
+        row = None
+        try:
+            cursor.execute(
+                """
+                SELECT password, cash, game_cash, total_rolling, initial_withdraw,
+                       current_rolling, profit_rate, last_attendance,
+                       COALESCE(display_name, ''), COALESCE(total_profit, 0),
+                       COALESCE(suspended, FALSE)
+                FROM users WHERE username = %s
+                """,
+                (username,),
+            )
+            row = cursor.fetchone()
+        except Exception as sel_e:
+            print(f"Login select fallback: {sel_e}")
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            cursor.execute(
+                """
+                SELECT password, cash, game_cash, total_rolling, initial_withdraw,
+                       current_rolling, profit_rate, last_attendance
+                FROM users WHERE username = %s
+                """,
+                (username,),
+            )
+            row = cursor.fetchone()
+            if row:
+                row = tuple(row) + ("", 0, False)
+
         if not row:
             cursor.close()
             conn.close()
             return jsonify({"error": "존재하지 않는 아이디입니다."}), 400
 
-        (
-            db_password,
-            cash,
-            game_cash,
-            total_rolling,
-            initial_withdraw,
-            current_rolling,
-            profit_rate,
-            last_attendance,
-            display_name,
-            total_profit,
-            suspended,
-        ) = row
+        vals = list(row) + [None] * 11
+        db_password = vals[0]
+        cash = vals[1]
+        game_cash = vals[2]
+        total_rolling = vals[3]
+        initial_withdraw = vals[4]
+        current_rolling = vals[5]
+        profit_rate = vals[6]
+        last_attendance = vals[7]
+        display_name = vals[8] if vals[8] is not None else ""
+        total_profit = vals[9] if vals[9] is not None else 0
+        suspended = bool(vals[10]) if vals[10] is not None else False
 
         if db_password != password:
             cursor.close()
