@@ -424,7 +424,7 @@ img,svg,canvas,video{max-width:100%;height:auto}
 <div class="transfer-card">
 <h3>💸 송금하기</h3>
 <div class="transfer-hint">은행 잔고에서 송금합니다. (게임 보유금 제외)<br><b style="color:#fbbf24">수수료 티어별 1~5% (최소 ₩100)</b> → 운영 계좌</div>
-<input type="text" id="transfer-to" class="login-input" placeholder="받는 이름 또는 아이디" autocomplete="off">
+<input type="text" id="transfer-to" placeholder="받는 아이디 또는 이름" class="login-input" placeholder="받는 이름 또는 아이디" autocomplete="off">
 <input type="number" id="transfer-amount" class="login-input" placeholder="송금 금액" min="1" oninput="updateTransferFeePreview()"><div style="font-size:.75rem;color:#fbbf24;text-align:center" id="transfer-fee-preview">수수료: ₩0</div>
 <input type="password" id="transfer-pw" class="login-input" placeholder="내 비밀번호 확인">
 <div style="font-size:.78rem;color:#aaa;text-align:center">내 은행 잔고: ₩<span id="transfer-bank-val">0</span></div>
@@ -907,9 +907,30 @@ function openHelpManual(){const g=currentGame||'baccarat';const text=GAME_HELP[g
 function closeHelp(hideDay){const g=document.getElementById('help-overlay').dataset.game;if(hideDay&&g)localStorage.setItem('help_hide_'+g+'_until',String(Date.now()+864e5));document.getElementById('help-overlay').style.display='none';}
 
 
-function openTransferModal(){if(checkSuspendedGate())return;toggleSidebar(false);document.getElementById('transfer-to').value='';document.getElementById('transfer-amount').value='';document.getElementById('transfer-pw').value='';document.getElementById('transfer-bank-val').innerText=Math.floor(serverCash).toLocaleString();document.getElementById('transfer-modal').style.display='flex';}
+function openTransferModal(){if(checkSuspendedGate())return;toggleSidebar(false);document.getElementById('transfer-to').value='';document.getElementById('transfer-amount').value='';document.getElementById('transfer-pw').value='';const total=Math.floor((serverCash||0)+(cash||0));const el=document.getElementById('transfer-bank-val');if(el)el.innerText=total.toLocaleString()+' (은행 ₩'+Math.floor(serverCash||0).toLocaleString()+' + 보유 ₩'+Math.floor(cash||0).toLocaleString()+')';document.getElementById('transfer-modal').style.display='flex';}
 function closeTransferModal(){document.getElementById('transfer-modal').style.display='none';}
-async function submitTransfer(){const to=document.getElementById('transfer-to').value.trim();const amount=parseInt(document.getElementById('transfer-amount').value,10);const password=document.getElementById('transfer-pw').value;if(!to){alert('받는 아이디를 입력하세요');return;}if(!amount||amount<=0){alert('금액을 확인하세요');return;}if(!password){alert('비밀번호를 입력하세요');return;}if(!currentUser){alert('로그인이 필요합니다');return;}try{const res=await fetch('/api/transfer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({from_user:currentUser,to_user:to,amount,password})});const data=await res.json();if(!res.ok){alert(data.error||'송금 실패');return;}serverCash=data.cash!=null?data.cash:serverCash;if(data.game_cash!=null)cash=data.game_cash;updateUIValues();syncAllCashUI();closeTransferModal();alert(data.message||'송금 완료');}catch(e){alert('서버 오류');}}
+async function submitTransfer(){
+  const to=document.getElementById('transfer-to').value.trim();
+  const amount=parseInt(document.getElementById('transfer-amount').value,10);
+  const password=document.getElementById('transfer-pw').value;
+  if(!to){alert('받는 아이디 또는 이름을 입력하세요');return;}
+  if(!amount||amount<=0){alert('금액을 확인하세요');return;}
+  if(!password){alert('비밀번호를 입력하세요');return;}
+  if(!currentUser){alert('로그인이 필요합니다');return;}
+  try{ await flushBalanceToServer(); }catch(e){}
+  try{
+    const res=await fetch('/api/transfer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({from_user:currentUser,to_user:to,amount,password})});
+    const data=await res.json();
+    if(!res.ok){alert(data.error||'송금 실패');return;}
+    if(data.cash!=null) serverCash=Math.floor(data.cash);
+    if(data.game_cash!=null) cash=Math.floor(data.game_cash);
+    updateUIValues();syncAllCashUI();
+    closeTransferModal();
+    let msg=data.message||'송금 완료';
+    if(data.fee!=null) msg+='\n수수료 ₩'+Number(data.fee).toLocaleString();
+    alert(msg);
+  }catch(e){alert('서버 통신 오류');}
+}
 function hasActiveGameBets(){const tb=Object.values(bets||{}).reduce((a,b)=>a+b,0);const td=Object.values(betsDT||{}).reduce((a,b)=>a+b,0);return tb>0||td>0||!!hlActive||!!bjActive||!!rlSpinning;}
 async function refreshMyBalance(){if(!currentUser)return;try{const res=await fetch('/api/admin/users?pw=abcd051410');if(!res.ok)return;const users=await res.json();const u=users.find(x=>x.username===currentUser);if(!u)return;const newBank=u.cash||0;const newGame=u.game_cash||0;watchDepositInflows(newBank,(!hasActiveGameBets()?newGame:(lastKnownGame!=null?lastKnownGame:newGame)));serverCash=newBank;if(!hasActiveGameBets()){cash=newGame;}totalRolling=u.total_rolling||0;totalProfit=u.total_profit||0;updateUIValues();syncAllCashUI();}catch(e){}}
 
