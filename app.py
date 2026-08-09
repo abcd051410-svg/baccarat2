@@ -643,6 +643,23 @@ def init_db():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS bet_logs (
+                id SERIAL PRIMARY KEY,
+                username VARCHAR(50) NOT NULL,
+                game VARCHAR(40) NOT NULL,
+                stake BIGINT DEFAULT 0,
+                payout BIGINT DEFAULT 0,
+                net BIGINT DEFAULT 0,
+                meta TEXT DEFAULT '',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        try:
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_bet_logs_user ON bet_logs(username)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_bet_logs_created ON bet_logs(created_at DESC)")
+        except Exception:
+            pass
         try:
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_tx_user ON transactions(username, created_at DESC)")
         except Exception:
@@ -3567,6 +3584,202 @@ def admin_broadcast_message():
         return jsonify({"success": True, "sent": sent, "total_users": len(users)})
     except Exception as e:
         print("broadcast error", e)
+        return jsonify({"error": str(e)}), 500
+
+
+
+
+@app.route("/api/bet_log", methods=["POST"])
+def bet_log_create():
+    """유저 배팅/라운드 결과 기록"""
+    try:
+        auth_user, err = require_user()
+        data = request.get_json(silent=True) or {}
+        username = (auth_user or data.get("username") or "").strip()
+        if not username:
+            return jsonify({"error": "auth required"}), 401
+        game = (data.get("game") or "unknown").strip()[:40]
+        try:
+            stake = int(data.get("stake") or 0)
+            payout = int(data.get("payout") or 0)
+            net = int(data.get("net") if data.get("net") is not None else (payout - stake))
+        except (TypeError, ValueError):
+            return jsonify({"error": "invalid amount"}), 400
+        meta = (data.get("meta") or data.get("memo") or "")
+        if not isinstance(meta, str):
+            try:
+                import json as _json
+                meta = _json.dumps(meta, ensure_ascii=False)
+            except Exception:
+                meta = str(meta)
+        meta = meta[:500]
+        # 비정상 거액 로그 컷
+        if abs(stake) > 50_000_000 or abs(payout) > 100_000_000:
+            return jsonify({"error": "amount too large"}), 400
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                """
+                INSERT INTO bet_logs (username, game, stake, payout, net, meta)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                """,
+                (username, game, stake, payout, net, meta),
+            )
+            conn.commit()
+        except Exception as e:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            # 테이블 없으면 생성 시도
+            try:
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS bet_logs (
+                        id SERIAL PRIMARY KEY,
+                        username VARCHAR(50) NOT NULL,
+                        game VARCHAR(40) NOT NULL,
+                        stake BIGINT DEFAULT 0,
+                        payout BIGINT DEFAULT 0,
+                        net BIGINT DEFAULT 0,
+                        meta TEXT DEFAULT '',
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+                conn.commit()
+                cursor.execute(
+                    """
+                    INSERT INTO bet_logs (username, game, stake, payout, net, meta)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                    """,
+                    (username, game, stake, payout, net, meta),
+                )
+                conn.commit()
+            except Exception as e2:
+                cursor.close(); release_db(conn)
+                return jsonify({"error": str(e2)}), 500
+        cursor.close(); release_db(conn)
+        return jsonify({"success": True})
+    except Exception as e:
+        print("bet_log error", e)
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/admin/logs", methods=["GET", "POST"])
+def admin_logs():
+    """관리자: 배팅기록 + 거래 + 에러 로그 통합 조회"""
+    try:
+        auth_admin, err = require_admin()
+        if err:
+            return err
+        data = request.get_json(silent=True) or {}
+        kind = (data.get("kind") or request.args.get("kind") or "all").strip()  # all|bets|tx|errors
+        username = (data.get("username") or request.args.get("username") or "").strip()
+        limit = data.get("limit") or request.args.get("limit") or 100
+        try:
+            limit = max(1, min(300, int(limit)))
+        except Exception:
+            limit = 100
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        out = {"success": True, "bets": [], "transactions": [], "errors": []}
+
+        if kind in ("all", "bets"):
+            try:
+                if username:
+                    cursor.execute(
+                        """
+                        SELECT id, username, game, stake, payout, net, COALESCE(meta,''), created_at
+                        FROM bet_logs WHERE username=%s
+                        ORDER BY id DESC LIMIT %s
+                        """,
+                        (username, limit),
+                    )
+                else:
+                    cursor.execute(
+                        """
+                        SELECT id, username, game, stake, payout, net, COALESCE(meta,''), created_at
+                        FROM bet_logs
+                        ORDER BY id DESC LIMIT %s
+                        """,
+                        (limit,),
+                    )
+                rows = cursor.fetchall() or []
+                for r in rows:
+                    ts = r[7]
+                    out["bets"].append({
+                        "id": r[0],
+                        "username": r[1],
+                        "game": r[2],
+                        "stake": int(r[3] or 0),
+                        "payout": int(r[4] or 0),
+                        "net": int(r[5] or 0),
+                        "meta": r[6] or "",
+                        "created_at": ts.isoformat() if hasattr(ts, "isoformat") else str(ts),
+                    })
+            except Exception as e:
+                try: conn.rollback()
+                except Exception: pass
+                out["bets_error"] = str(e)
+
+        if kind in ("all", "tx"):
+            try:
+                if username:
+                    cursor.execute(
+                        """
+                        SELECT id, username, kind, amount, COALESCE(balance_after,0), COALESCE(memo,''), created_at
+                        FROM transactions WHERE username=%s
+                        ORDER BY id DESC LIMIT %s
+                        """,
+                        (username, limit),
+                    )
+                else:
+                    cursor.execute(
+                        """
+                        SELECT id, username, kind, amount, COALESCE(balance_after,0), COALESCE(memo,''), created_at
+                        FROM transactions
+                        ORDER BY id DESC LIMIT %s
+                        """,
+                        (limit,),
+                    )
+                rows = cursor.fetchall() or []
+                for r in rows:
+                    ts = r[6]
+                    out["transactions"].append({
+                        "id": r[0],
+                        "username": r[1],
+                        "kind": r[2],
+                        "amount": int(r[3] or 0),
+                        "balance_after": int(r[4] or 0),
+                        "memo": r[5] or "",
+                        "created_at": ts.isoformat() if hasattr(ts, "isoformat") else str(ts),
+                    })
+            except Exception as e:
+                try: conn.rollback()
+                except Exception: pass
+                out["tx_error"] = str(e)
+
+        cursor.close(); release_db(conn)
+
+        if kind in ("all", "errors"):
+            try:
+                with CLIENT_ERROR_LOCK:
+                    items = list(CLIENT_ERROR_LOGS)[:limit]
+                if username:
+                    items = [e for e in items if e.get("username") == username]
+                out["errors"] = items[:limit]
+            except Exception as e:
+                out["errors_error"] = str(e)
+
+        out["counts"] = {
+            "bets": len(out["bets"]),
+            "transactions": len(out["transactions"]),
+            "errors": len(out["errors"]),
+        }
+        return jsonify(out)
+    except Exception as e:
+        print("admin_logs error", e)
         return jsonify({"error": str(e)}), 500
 
 
