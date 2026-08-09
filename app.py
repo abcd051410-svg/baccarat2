@@ -183,6 +183,8 @@ def calc_season_points(init_w, game_cash):
         game_cash = int(game_cash or 0)
     except (TypeError, ValueError):
         return 0, {"efficiency": 0, "profit_pts": 0, "profit": 0, "roi": 0.0}
+    if init_w <= 0:
+        return 0, {"efficiency": 0, "profit_pts": 0, "profit": 0, "roi": 0.0}
     profit = game_cash - init_w
     if profit <= 0:
         return 0, {"efficiency": 0, "profit_pts": 0, "profit": int(profit), "roi": 0.0}
@@ -272,7 +274,7 @@ def require_user():
 
 
 def require_admin():
-    """관리자 인증 강화: 토큰(관리자) 또는 pw 확인"""
+    """관리자 인증: 1) 관리자 토큰  2) 환경변수 ADMIN_PASSWORD  3) 레거시(비권장)"""
     u = get_auth_username()
     if u == ADMIN_USER:
         return ADMIN_USER, None
@@ -286,13 +288,20 @@ def require_admin():
                 data = _json.loads(request.data.decode("utf-8") or "{}")
             except Exception:
                 data = {}
-        pw = (data.get("pw") or data.get("admin_user") or data.get("password") or "").strip()
+        pw = (data.get("pw") or data.get("password") or "").strip()
+        # admin_user 필드는 비번이 아님 — 더 이상 인증으로 쓰지 않음
     else:
-        pw = (request.args.get("pw") or request.args.get("admin_user") or "").strip()
+        pw = (request.args.get("pw") or request.args.get("password") or "").strip()
 
-    if pw in ("abcd051410", ADMIN_USER):
+    import os as _os
+    env_pw = (_os.environ.get("ADMIN_PASSWORD") or "").strip()
+    if env_pw and pw and pw == env_pw:
+        return ADMIN_USER, None
+    # 레거시: 환경변수 없을 때만 기존 비번 허용 (배포 시 ADMIN_PASSWORD 설정 권장)
+    if not env_pw and pw and pw in ("4455",):
         return ADMIN_USER, None
     return None, (jsonify({"error": "Unauthorized - 관리자만 접근 가능"}), 403)
+
 
 
 # rank 높을수록 상위. 아이언4(최저) → ... → 챌린저(최고)
