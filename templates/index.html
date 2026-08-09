@@ -3392,7 +3392,7 @@ async function loadFraudScan(){
         '</div>'+
         '<div style="margin-top:6px;font-size:.8rem;line-height:1.45">'+
           '총자산 <b style="color:#fff">₩'+Math.floor(u.assets||0).toLocaleString()+'</b>'+
-          ' · 부당추정 <b style="color:#f87171">₩'+Math.floor(u.unfair_profit||0).toLocaleString()+'</b><br>'+
+          ' · 부당추정 <b style="color:#f87171">₩'+Math.floor(u.unfair_profit||0).toLocaleString()+'</b> <span style="color:#888;font-size:.7rem">(시드대비 ₩'+Math.floor(u.net_vs_seed||0).toLocaleString()+')</span><br>'+
           '정상상한 ₩'+Math.floor(u.fair_cap||0).toLocaleString()+
           ' · 지급합 ₩'+Math.floor(u.admin_grants||0).toLocaleString()+'<br>'+
           '세션수익합 ₩'+Math.floor(u.close_profit_sum||0).toLocaleString()+
