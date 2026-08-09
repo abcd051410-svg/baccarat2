@@ -33,6 +33,7 @@ TOKEN_TTL = 60 * 60 * 24 * 7  # 7 days
 
 # ===== 공유 상태 (메모리) =====
 CURRENT_NOTICE = {"id": "", "message": "", "created_at": 0}
+CURRENT_PATCH = {"id": "", "title": "", "date": "", "body": "", "created_at": 0}
 FORCE_RELOAD = {"id": 0, "message": ""}
 
 DIFFICULTY_PRESETS = {
@@ -170,6 +171,30 @@ DAILY_MISSIONS = [
     {"code": "win_any", "title": "게임 1회 승리", "target": 1, "reward": 20000},
     {"code": "transfer", "title": "송금 1회", "target": 1, "reward": 10000},
 ]
+
+
+
+def calc_season_points(init_w, game_cash):
+    """시즌 점수: 수익률만 (공정 10/10). 세션 상한 30000"""
+    try:
+        init_w = int(init_w or 0)
+        game_cash = int(game_cash or 0)
+    except (TypeError, ValueError):
+        return 0, {"efficiency": 0, "profit_pts": 0, "profit": 0, "roi": 0.0}
+    profit = game_cash - init_w
+    if profit <= 0:
+        return 0, {"efficiency": 0, "profit_pts": 0, "profit": int(profit), "roi": 0.0}
+    base = max(init_w, 1)
+    roi = profit / float(base)
+    efficiency = int(min(30000, roi * 10000))
+    return efficiency, {
+        "efficiency": efficiency,
+        "profit_pts": 0,
+        "profit": int(profit),
+        "roi": round(roi * 100, 2),
+        "capped": efficiency,
+        "mode": "roi_only",
+    }
 
 
 def hash_password(password: str) -> str:
@@ -1190,8 +1215,12 @@ def update_user():
 
         conn = get_db_connection()
         cursor = conn.cursor()
+        try:
+            ensure_user_columns(cursor, conn)
+        except Exception:
+            pass
         cursor.execute(
-            "SELECT COALESCE(cash, 0), COALESCE(game_cash, 0) FROM users WHERE username = %s",
+            "SELECT COALESCE(cash, 0), COALESCE(game_cash, 0) FROM users WHERE username = %s FOR UPDATE",
             (username,),
         )
         row = cursor.fetchone()
@@ -1201,7 +1230,11 @@ def update_user():
         db_cash = int(row[0] or 0)
         db_game = int(row[1] or 0)
         final_cash = db_cash
-        final_game = db_game if game_cash is None else int(game_cash)
+        # 게임머니: 클라이언트 값을 기본 사용하되, 비정상 음수 방지
+        if game_cash is None:
+            final_game = db_game
+        else:
+            final_game = max(0, int(game_cash))
 
         if cash is not None:
             c = int(cash)
@@ -1613,6 +1646,57 @@ def admin_send_notice():
 
 
 @app.route("/api/notice", methods=["GET"])
+
+
+@app.route("/api/patch", methods=["GET"])
+def get_patch_notes():
+    """현재 패치 노트 (전체 유저)"""
+    if not CURRENT_PATCH.get("id"):
+        return jsonify({"id": "", "title": "", "date": "", "body": ""})
+    return jsonify({
+        "id": CURRENT_PATCH.get("id") or "",
+        "title": CURRENT_PATCH.get("title") or "패치 노트",
+        "date": CURRENT_PATCH.get("date") or "",
+        "body": CURRENT_PATCH.get("body") or "",
+        "created_at": CURRENT_PATCH.get("created_at") or 0,
+    })
+
+
+@app.route("/api/admin/patch", methods=["POST"])
+def admin_set_patch():
+    """관리자 패치 노트 작성/배포 → 전체 유저 팝업"""
+    global CURRENT_PATCH, CURRENT_NOTICE
+    try:
+        auth_admin, err = require_admin()
+        if err:
+            return err
+        data = request.get_json(silent=True) or {}
+        title = (data.get("title") or "패치 노트").strip()[:80]
+        body = (data.get("body") or "").strip()[:4000]
+        date = (data.get("date") or time.strftime("%Y.%m.%d")).strip()[:20]
+        if not body:
+            return jsonify({"error": "패치 내용을 입력하세요."}), 400
+        pid = f"patch_{int(time.time() * 1000)}"
+        CURRENT_PATCH = {
+            "id": pid,
+            "title": title,
+            "date": date,
+            "body": body,
+            "created_at": time.time(),
+        }
+        # 중요 공지로도 한 줄 안내
+        CURRENT_NOTICE = {
+            "id": f"notice_{pid}",
+            "message": f"📢 [패치] {title}\n\n새 패치 노트가 등록되었습니다.\n메뉴에서 패치 노트를 확인하세요.",
+            "created_at": time.time(),
+            "important": True,
+        }
+        return jsonify({"success": True, "id": pid, "patch": CURRENT_PATCH})
+    except Exception as e:
+        print(f"admin patch: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 def get_notice():
     """최신 공지 조회 (프론트 15초 폴링)"""
     if not CURRENT_NOTICE.get("id"):
@@ -2854,24 +2938,50 @@ def safety_self_exclude():
 
 
 
+
 # ===== 파산 재기 지원 (하루 1회) =====
 RECOVERY_AMOUNT = 70_000
-RECOVERY_BANK_MAX = 1_000  # 은행 잔고가 이 이하고 게임머니 0일 때
+RECOVERY_BANK_MAX = 5_000  # 은행 잔고 이 이하 + 게임머니 0
 
 
 @app.route("/api/recovery/status", methods=["GET", "POST"])
 def recovery_status():
     try:
+        data = request.get_json(silent=True) or {}
         auth_user, err = require_user()
-        if err:
-            return err
+        auth_user = auth_user or (data.get("username") or request.args.get("user") or "").strip()
+        if not auth_user:
+            return jsonify({"error": "로그인이 필요합니다"}), 401
         conn = get_db_connection()
         cursor = conn.cursor()
-        ensure_user_columns(cursor, conn)
-        cursor.execute(
-            "SELECT COALESCE(cash,0), COALESCE(game_cash,0), COALESCE(last_recovery,'') FROM users WHERE username=%s",
-            (auth_user,),
-        )
+        try:
+            ensure_user_columns(cursor, conn)
+            try:
+                conn.commit()
+            except Exception:
+                pass
+        except Exception as ee:
+            print(f"recovery status ensure: {ee}")
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        try:
+            cursor.execute(
+                "SELECT COALESCE(cash,0), COALESCE(game_cash,0), COALESCE(last_recovery,'') FROM users WHERE username=%s",
+                (auth_user,),
+            )
+        except Exception as se:
+            # last_recovery 컬럼 없는 경우
+            print(f"recovery status select fallback: {se}")
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            cursor.execute(
+                "SELECT COALESCE(cash,0), COALESCE(game_cash,0), '' FROM users WHERE username=%s",
+                (auth_user,),
+            )
         row = cursor.fetchone()
         cursor.close()
         release_db(conn)
@@ -2880,8 +2990,8 @@ def recovery_status():
         bank, game, last = int(row[0] or 0), int(row[1] or 0), (row[2] or "")
         today = time.strftime("%Y-%m-%d")
         broke = (game <= 0 and bank <= RECOVERY_BANK_MAX)
-        claimed_today = (last == today)
-        can_claim = broke and (not claimed_today)
+        claimed_today = (str(last) == today)
+        can_claim = bool(broke and (not claimed_today))
         return jsonify({
             "success": True,
             "broke": broke,
@@ -2891,46 +3001,84 @@ def recovery_status():
             "bank": bank,
             "game_cash": game,
             "last_recovery": last,
+            "bank_max": RECOVERY_BANK_MAX,
         })
     except Exception as e:
         print(f"recovery status: {e}")
-        return jsonify({"error": "status error"}), 500
+        return jsonify({"error": f"status error: {e}"}), 500
 
 
 @app.route("/api/recovery/claim", methods=["POST"])
 def recovery_claim():
-    """파산 유저 하루 1회 재기 지원금"""
+    """파산 유저 하루 1회 재기 지원금 — 서버 권위 지급"""
     try:
+        data = request.get_json(silent=True) or {}
         auth_user, err = require_user()
-        if err:
-            return err
+        auth_user = auth_user or (data.get("username") or "").strip()
+        if not auth_user:
+            return jsonify({"error": "로그인이 필요합니다"}), 401
         today = time.strftime("%Y-%m-%d")
         conn = get_db_connection()
         cursor = conn.cursor()
-        ensure_user_columns(cursor, conn)
-        cursor.execute(
-            "SELECT COALESCE(cash,0), COALESCE(game_cash,0), COALESCE(last_recovery,'') FROM users WHERE username=%s FOR UPDATE",
-            (auth_user,),
-        )
+        try:
+            ensure_user_columns(cursor, conn)
+            try:
+                conn.commit()
+            except Exception:
+                pass
+        except Exception as ee:
+            print(f"recovery claim ensure: {ee}")
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        try:
+            cursor.execute(
+                "SELECT COALESCE(cash,0), COALESCE(game_cash,0), COALESCE(last_recovery,'') FROM users WHERE username=%s FOR UPDATE",
+                (auth_user,),
+            )
+        except Exception:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            cursor.execute(
+                "SELECT COALESCE(cash,0), COALESCE(game_cash,0), '' FROM users WHERE username=%s FOR UPDATE",
+                (auth_user,),
+            )
         row = cursor.fetchone()
         if not row:
             cursor.close(); release_db(conn)
             return jsonify({"error": "유저 없음"}), 404
         bank, game, last = int(row[0] or 0), int(row[1] or 0), (row[2] or "")
-        if last == today:
+        if str(last) == today:
             cursor.close(); release_db(conn)
             return jsonify({"error": "오늘은 이미 재기 지원을 받았습니다."}), 400
         if game > 0 or bank > RECOVERY_BANK_MAX:
             cursor.close(); release_db(conn)
-            return jsonify({"error": "파산 상태가 아닙니다. (게임머니 0 · 은행 잔고 부족 시만 가능)"}), 400
+            return jsonify({
+                "error": f"파산 상태가 아닙니다. (게임머니 0원 · 은행 ₩{RECOVERY_BANK_MAX:,} 이하만 가능 / 현재 은행 ₩{bank:,} · 게임 ₩{game:,})"
+            }), 400
 
-        # 게임머니로 지급 (바로 플레이 가능)
         new_game = RECOVERY_AMOUNT
-        cursor.execute(
-            "UPDATE users SET game_cash=%s, last_recovery=%s WHERE username=%s",
-            (new_game, today, auth_user),
-        )
-        log_transaction(cursor, auth_user, "재기지원", RECOVERY_AMOUNT, bank, "일일 파산 재기 지원")
+        try:
+            cursor.execute(
+                "UPDATE users SET game_cash=%s, last_recovery=%s WHERE username=%s",
+                (new_game, today, auth_user),
+            )
+        except Exception:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            cursor.execute(
+                "UPDATE users SET game_cash=%s WHERE username=%s",
+                (new_game, auth_user),
+            )
+        try:
+            log_transaction(cursor, auth_user, "재기지원", RECOVERY_AMOUNT, bank, "일일 파산 재기 지원")
+        except Exception:
+            pass
         conn.commit()
         cursor.close()
         release_db(conn)
@@ -2938,11 +3086,13 @@ def recovery_claim():
             "success": True,
             "amount": RECOVERY_AMOUNT,
             "game_cash": new_game,
+            "cash": bank,
             "message": f"재기 지원금 ₩{RECOVERY_AMOUNT:,} 지급 완료",
         })
     except Exception as e:
         print(f"recovery claim: {e}")
-        return jsonify({"error": "재기 지원 처리 실패"}), 500
+        return jsonify({"error": f"재기 지원 처리 실패: {e}"}), 500
+
 
 
 @app.route("/api/season/ranking", methods=["GET"])
