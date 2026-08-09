@@ -1655,7 +1655,7 @@ async function loadSelectedSeasonRanking(){
 async function adminEndSeason(){
   if(!confirm('현재 시즌을 종료하고 다음 시즌으로 넘어갈까요?\n\n· 현재 순위가 저장됩니다\n· 모든 유저 시즌 포인트가 0이 됩니다'))return;
   try{
-    const res=await authFetch('/api/admin/season/end',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pw:'abcd051410',admin_user:'abcd051410'})});
+    const res=await authFetch('/api/admin/season/end',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pw:'4455',admin_user:'abcd051410'})});
     const data=await res.json();
     if(!res.ok){alert(data.error||'실패');return;}
     const ended=data.ended||{};
@@ -1745,7 +1745,7 @@ async function adminAddCash(username, _pw, sign){
     const res=await authFetch('/api/admin/edit',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({pw:'abcd051410',admin_user:'abcd051410',username,cash:next})
+      body:JSON.stringify({pw:'4455',admin_user:'abcd051410',username,cash:next})
     });
     const data=await res.json().catch(()=>({}));
     if(!res.ok){ alert(data.error||('실패 '+res.status)); return; }
@@ -2153,7 +2153,7 @@ async function startHighLow(){if(hlActive)return;const cost=hlStake;if(cash<cost
 async function playHighLow(choice){if(!hlActive||!hlCurrentCard)return;document.getElementById('hl-high-btn').disabled=true;document.getElementById('hl-low-btn').disabled=true;document.getElementById('hl-same-btn').disabled=true;const next=drawHLCard();const el=createCardElement(next);document.getElementById('hl-next-slot').innerHTML='';document.getElementById('hl-next-slot').appendChild(el);await delay(450);el.classList.add('flipped');try{sfxCard();}catch(e){};await delay(650);const cur=hlCurrentCard.val,nxt=next.val,odds=calcHLOdds(cur);let win=false,used=1;if(choice==='same'){if(nxt===cur){win=true;used=odds.sameOdd;}}else if(choice==='high'){if(cur===1){if(nxt>cur){win=true;used=odds.highOdd;}}else if(nxt>cur||nxt===cur){win=true;used=odds.highOdd;}}else if(choice==='low'){if(cur===13){if(nxt<cur){win=true;used=odds.lowOdd;}}else if(nxt<cur||nxt===cur){win=true;used=odds.lowOdd;}}const re=document.getElementById('hl-result-text');if(win){hlStreak++;hlPot=Math.floor(hlPot*used);re.innerText=(nxt===cur?'같은 숫자 적중!':'적중!')+' ×'+used+' → ₩'+hlPot.toLocaleString();re.style.color='#4ade80';hlCurrentCard=next;await delay(700);document.getElementById('hl-current-slot').innerHTML='';document.getElementById('hl-current-slot').appendChild(el);document.getElementById('hl-next-slot').innerHTML='<span style="color:#555;font-size:.75rem">?</span>';updateHLButtons(hlCurrentCard.val);document.getElementById('hl-streak-text').innerText='연속 '+hlStreak+'회 · 상금 ₩'+Math.floor(hlPot).toLocaleString();document.getElementById('hl-cashout-btn').style.display='block';re.innerText='계속하거나 상금을 챙기세요';}else{re.innerText='실패... 상금 소멸';re.style.color='#ef4444';collectHouse(hlStake,'하이로우패배 · '+(currentUser||''));hlActive=false;hlPot=0;hlStreak=0;checkBrokeReset();document.getElementById('hl-choice-btns').style.display='none';document.getElementById('hl-cashout-btn').style.display='none';document.getElementById('hl-start-btn').style.display='block';const sw=document.getElementById('hl-stake-wrap');if(sw)sw.style.display='block';document.getElementById('hl-streak-text').innerText='연속 0회 · 상금 ₩0';await updateServerData(0);syncAllCashUI();}}
 async function cashoutHighLow(){if(!hlActive||hlPot<=0){alert('챙길 상금 없음');return;}const net=hlPot-(hlStake||0);if(net)collectHouse(-net,'하이로우당첨 · '+(currentUser||''));cash+=hlPot;alert('₩'+hlPot.toLocaleString()+' 획득! ('+hlStreak+'연승)');hlActive=false;hlPot=0;hlStreak=0;syncAllCashUI();await updateServerData(0);resetHighLowUI();}
 async function handleDeleteAccount(){if(!currentUser)return;if(!confirm('정말 탈퇴하시겠습니까? 모든 잔액과 기록이 삭제됩니다.'))return;const pw=prompt('비밀번호를 입력하세요');if(pw===null)return;try{const res=await fetch('/api/delete_account',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:currentUser,password:pw})});const data=await res.json();if(res.ok){alert('탈퇴가 완료되었습니다.');localStorage.removeItem('bacc_server_user');localStorage.removeItem('auth_token');authToken='';;location.reload();}else alert(data.error||'탈퇴 실패');}catch(e){console.error(e);alert('서버 오류: '+(e&&e.message?e.message:e));}}
-async function adminResetRanking(){if(currentUser!=='abcd051410'){alert('권한 없음');return;}if(!confirm('모든 유저의 총 수익·총 배팅을 0으로 초기화할까요?'))return;try{const res=await authFetch('/api/admin/reset_ranking',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({admin_user:'abcd051410',pw:'abcd051410'})});if(res.ok)alert('랭킹이 초기화되었습니다.');else alert('실패');}catch(e){console.error(e);alert('서버 오류: '+(e&&e.message?e.message:e));}}
+async function adminResetRanking(){if(currentUser!=='abcd051410'){alert('권한 없음');return;}if(!confirm('모든 유저의 총 수익·총 배팅을 0으로 초기화할까요?'))return;try{const res=await authFetch('/api/admin/reset_ranking',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({admin_user:'abcd051410',pw:'4455'})});if(res.ok)alert('랭킹이 초기화되었습니다.');else alert('실패');}catch(e){console.error(e);alert('서버 오류: '+(e&&e.message?e.message:e));}}
 
 async function undoLastBet(){if(!isBettingOpen){alert('배팅 시간에만 취소할 수 있습니다.');return;}if(!lastBetsBacc.length){alert('취소할 배팅이 없습니다.');return;}const last=lastBetsBacc.pop();const t=last.type,a=last.amt;bets[t]=Math.max(0,(bets[t]||0)-a);cash+=a;const chip=document.getElementById('chip-'+t),val=document.getElementById('val-'+t);if(chip&&val){if(bets[t]>0){val.innerText=formatBetText(bets[t]);chip.style.display='flex';}else{chip.style.display='none';val.innerText='0';}}document.getElementById('cash-val').innerText=Math.floor(cash).toLocaleString();document.getElementById('bet-val').innerText=Math.floor(Object.values(bets).reduce((a,b)=>a+b,0)).toLocaleString();syncAllCashUI();updateServerData(0);}
 async function undoLastBetDT(){if(!isBettingOpenDT){alert('배팅 시간에만 취소할 수 있습니다.');return;}if(!lastBetsDT.length){alert('취소할 배팅이 없습니다.');return;}const last=lastBetsDT.pop();const t=last.type,a=last.amt,f=last.fee||0;betsDT[t]=Math.max(0,(betsDT[t]||0)-a);cash+=a+f;if(f>0)collectHouse(-f,'용호수수료환급 · '+(currentUser||''));const chipId=t==='TIE'?'chip-DT_TIE':'chip-'+t,valId=t==='TIE'?'val-DT_TIE':'val-'+t;const chip=document.getElementById(chipId),val=document.getElementById(valId);if(chip&&val){if(betsDT[t]>0){val.innerText=formatBetText(betsDT[t]);chip.style.display='flex';}else{chip.style.display='none';val.innerText='0';}}document.getElementById('dt-cash-val').innerText=Math.floor(cash).toLocaleString();document.getElementById('dt-bet-val').innerText=Math.floor(Object.values(betsDT).reduce((a,b)=>a+b,0)).toLocaleString();syncAllCashUI();updateServerData(0);}
@@ -2605,7 +2605,7 @@ async function adminBulkPay(){
   const label=amount>0?('전체 유저에게 ₩'+amount.toLocaleString()+' 지급'):('전체 유저에서 ₩'+Math.abs(amount).toLocaleString()+' 차감');
   if(!confirm(label+'\n진행할까요?'))return;
   try{
-    const res=await authFetch('/api/admin/bulk_pay',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pw:'abcd051410',admin_user:'abcd051410',amount})});
+    const res=await authFetch('/api/admin/bulk_pay',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pw:'4455',admin_user:'abcd051410',amount})});
     const data=await res.json();
     if(!res.ok){alert(data.error||'실패');return;}
     alert((data.count||0)+'명에게 반영 완료');
@@ -2736,7 +2736,7 @@ async function adminToggleSuspend(username,suspend){
   const label=suspend?'일시정지':'정지 해제';
   if(!confirm('['+username+'] 계정을 '+label+' 할까요?'))return;
   try{
-    const res=await authFetch('/api/admin/suspend',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pw:'abcd051410',admin_user:'abcd051410',username,suspend:!!suspend})});
+    const res=await authFetch('/api/admin/suspend',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pw:'4455',admin_user:'abcd051410',username,suspend:!!suspend})});
     const data=await res.json();
     if(!res.ok){alert(data.error||'실패');return;}
     alert(label+' 완료');
@@ -2799,7 +2799,7 @@ async function adminRenameUser(username){
   if(!n){alert('이름을 입력하세요');return;}
   if(n.length>20){alert('20자 이내');return;}
   try{
-    const res=await authFetch('/api/admin/rename',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pw:'abcd051410',admin_user:'abcd051410',username,display_name:n})});
+    const res=await authFetch('/api/admin/rename',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pw:'4455',admin_user:'abcd051410',username,display_name:n})});
     const data=await res.json();
     if(!res.ok){alert(data.error||'실패');return;}
     alert('이름 변경: '+n);
@@ -2872,7 +2872,7 @@ async function fetchDifficulty(force){
 }
 async function adminSetDifficulty(mode){
   try{
-    const res=await authFetch('/api/admin/difficulty',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pw:'abcd051410',admin_user:'abcd051410',mode})});
+    const res=await authFetch('/api/admin/difficulty',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pw:'4455',admin_user:'abcd051410',mode})});
     const d=await res.json();
     if(!res.ok){alert(d.error||'실패');return;}
     difficulty={mode:d.mode,label:d.label,rtp:d.rtp,mult:d.mult};
@@ -3067,7 +3067,7 @@ async function runForceReloadSequence(msg){
 async function adminForceReload(){
   if(!confirm('모든 접속 유저에게 강제 새로고침을 보낼까요?'))return;
   try{
-    const res=await authFetch('/api/admin/force_reload',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pw:'abcd051410',admin_user:'abcd051410'})});
+    const res=await authFetch('/api/admin/force_reload',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pw:'4455',admin_user:'abcd051410'})});
     const data=await res.json();
     if(!res.ok){alert(data.error||'실패');return;}
     lastForceReloadId = Number(data.id||0);
@@ -3144,7 +3144,7 @@ async function adminBulkSetAssets(){
   const resetGame=!!(document.getElementById('admin-bulk-reset-game')&&document.getElementById('admin-bulk-reset-game').checked);
   if(!confirm('모든 유저 은행 잔고를 ₩'+cash.toLocaleString()+' 으로 설정할까요?'+(resetGame?'\\n(게임 보유금 0 초기화 포함)':'')))return;
   try{
-    const res=await authFetch('/api/admin/bulk_set_assets',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pw:'abcd051410',admin_user:'abcd051410',cash,reset_game_cash:resetGame})});
+    const res=await authFetch('/api/admin/bulk_set_assets',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pw:'4455',admin_user:'abcd051410',cash,reset_game_cash:resetGame})});
     const data=await res.json();
     if(!res.ok){alert(data.error||'실패');return;}
     alert((data.count||0)+'명 적용 완료');
@@ -3160,7 +3160,7 @@ async function adminSetUserAssets(username){
   if(isNaN(cash)||cash<0){alert('금액 오류');return;}
   const g=prompt('게임 보유금(원) — 빈칸이면 유지:','');
   if(g===null)return;
-  const body={pw:'abcd051410',admin_user:'abcd051410',username,cash};
+  const body={pw:'4455',admin_user:'abcd051410',username,cash};
   if(g!==''){
     const game_cash=parseInt(g,10);
     if(isNaN(game_cash)||game_cash<0){alert('게임머니 오류');return;}
@@ -3183,7 +3183,7 @@ async function adminSetUserRolling(username){
   if(init===null)return;
   const tot=prompt('총 롤링(total_rolling) 설정 — 빈칸이면 유지 (티어에 영향):','');
   if(tot===null)return;
-  const body={pw:'abcd051410',admin_user:'abcd051410',username};
+  const body={pw:'4455',admin_user:'abcd051410',username};
   if(cur!==''){const v=parseInt(cur,10);if(isNaN(v)||v<0){alert('오류');return;}body.current_rolling=v;}
   if(init!==''){const v=parseInt(init,10);if(isNaN(v)||v<0){alert('오류');return;}body.initial_withdraw=v;}
   if(tot!==''){const v=parseInt(tot,10);if(isNaN(v)||v<0){alert('오류');return;}body.total_rolling=v;}
@@ -3596,7 +3596,7 @@ async function loadAdminLogs(){
     const res=await authFetch('/api/admin/logs',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({pw:'abcd051410',admin_user:'abcd051410',token:authToken,username:user.trim(),kind:kind,limit:150})
+      body:JSON.stringify({pw:'4455',admin_user:'abcd051410',token:authToken,username:user.trim(),kind:kind,limit:150})
     });
     const data=await res.json().catch(()=>({}));
     if(!res.ok){ if(box) box.innerHTML='실패: '+(data.error||res.status); return; }
@@ -3653,7 +3653,7 @@ async function loadAdminErrors(){
     const res=await authFetch('/api/admin/errors',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({pw:'abcd051410',admin_user:'abcd051410',token:authToken,mark_read:true})
+      body:JSON.stringify({pw:'4455',admin_user:'abcd051410',token:authToken,mark_read:true})
     });
     const data=await res.json().catch(()=>({}));
     if(!res.ok){ if(box) box.innerHTML='실패: '+(data.error||res.status); return; }
@@ -3678,7 +3678,7 @@ async function loadAdminErrors(){
 async function clearAdminErrors(){
   if(!confirm('에러 로그를 모두 삭제할까요?'))return;
   try{
-    await authFetch('/api/admin/errors/clear',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pw:'abcd051410',token:authToken})});
+    await authFetch('/api/admin/errors/clear',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pw:'4455',token:authToken})});
     loadAdminErrors();
   }catch(e){alert('실패');}
 }
@@ -3691,7 +3691,7 @@ async function adminBroadcastMessage(){
     const res=await authFetch('/api/admin/broadcast_message',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({pw:'abcd051410',admin_user:'abcd051410',token:authToken,body:body})
+      body:JSON.stringify({pw:'4455',admin_user:'abcd051410',token:authToken,body:body})
     });
     const data=await res.json().catch(()=>({}));
     if(!res.ok){alert(data.error||('실패 '+res.status));return;}
@@ -3748,7 +3748,7 @@ async function loadFraudScan(){
     const res=await authFetch('/api/admin/fraud',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({pw:'abcd051410',admin_user:'abcd051410',token:authToken})
+      body:JSON.stringify({pw:'4455',admin_user:'abcd051410',token:authToken})
     });
     const data=await res.json().catch(()=>({}));
     if(!res.ok){
@@ -3844,7 +3844,7 @@ async function fraudRecoverUnfair(u){
     const res=await authFetch('/api/admin/fraud/recover',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({pw:'abcd051410',admin_user:'abcd051410',token:authToken,username:u.username,mode:'unfair'})
+      body:JSON.stringify({pw:'4455',admin_user:'abcd051410',token:authToken,username:u.username,mode:'unfair'})
     });
     const data=await res.json().catch(()=>({}));
     if(!res.ok){alert(data.error||('실패 '+res.status));return;}
@@ -3867,7 +3867,7 @@ async function fraudRecoverSeed(username, displayName){
     const res=await authFetch('/api/admin/fraud/recover',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({pw:'abcd051410',admin_user:'abcd051410',token:authToken,username:username,mode:'seed'})
+      body:JSON.stringify({pw:'4455',admin_user:'abcd051410',token:authToken,username:username,mode:'seed'})
     });
     const data=await res.json().catch(()=>({}));
     if(!res.ok){alert(data.error||('실패 '+res.status));return;}
@@ -4481,7 +4481,7 @@ async function sendAdminNotice(){
     const res=await authFetch('/api/admin/notice',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({pw:'abcd051410', admin_user:'abcd051410', message:msg})
+      body:JSON.stringify({pw:'4455', admin_user:'abcd051410', message:msg})
     });
     const data=await res.json().catch(()=>({}));
     if(!res.ok){ alert(data.error||'공지 발송 실패'); return; }
@@ -4552,7 +4552,7 @@ async function sendAdminPatch(){
     const res=await authFetch('/api/admin/patch',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({pw:'abcd051410',admin_user:'abcd051410',title,date,body,message:body})
+      body:JSON.stringify({pw:'4455',admin_user:'abcd051410',title,date,body,message:body})
     });
     const data=await res.json().catch(()=>({}));
     if(!res.ok){alert(data.error||'패치 배포 실패');return;}
