@@ -3424,21 +3424,35 @@ def admin_fraud_scan():
         import re as _re
         for row in txs:
             uname = row[0]
-            kind = row[1] or ""
-            amount = int(row[2] or 0)
+            kind = (row[1] or "").strip()
+            try:
+                amount = int(row[2] or 0)
+            except (TypeError, ValueError):
+                amount = 0
             memo = row[3] or ""
-            if kind in ("전체지급", "관리자지급", "관리자입금", "재기지원"):
-                grants[uname] = grants.get(uname, 0) + max(0, amount)
-            if kind == "출석보상":
-                grants[uname] = grants.get(uname, 0) + max(0, amount)
-            if kind == "미션보상":
-                grants[uname] = grants.get(uname, 0) + max(0, amount)
+            # 정상 지급만 인정 (1건 상한 + 종류 제한) — 오염된 거액 거래 제외
+            if kind in ("전체지급", "관리자지급", "관리자입금"):
+                if 0 < amount <= 5_000_000:
+                    grants[uname] = grants.get(uname, 0) + amount
+            elif kind == "재기지원":
+                if 0 < amount <= 200_000:
+                    grants[uname] = grants.get(uname, 0) + amount
+            elif kind == "출석보상":
+                if 0 < amount <= 200_000:
+                    grants[uname] = grants.get(uname, 0) + amount
+            elif kind == "미션보상":
+                if 0 < amount <= 200_000:
+                    grants[uname] = grants.get(uname, 0) + amount
+            # 마감 세션수익 파싱
             if kind == "마감":
-                # memo: 세션수익 12345
                 m = _re.search(r"세션수익\s*(-?\d+)", memo)
                 if m:
-                    sp = int(m.group(1))
-                    close_profits.setdefault(uname, []).append(sp)
+                    try:
+                        sp = int(m.group(1))
+                        # 비정상적으로 큰 값도 기록(탐지용)하되 별도 리스트
+                        close_profits.setdefault(uname, []).append(sp)
+                    except ValueError:
+                        pass
 
         results = []
         now = time.time()
@@ -3452,17 +3466,22 @@ def admin_fraud_scan():
             last_seen = float(r[6] or 0)
             assets = cash + game
             grant = int(grants.get(uname, 0))
-            # --- 부당수익 계산 (0원 버그 수정) ---
-            # 1) 시드 대비 순증
+            # 지급합 오염 방지: 유저당 최대 5,000만, 자산 초과 시 무시
+            if grant > 50_000_000:
+                grant = 50_000_000
+            if grant > assets + SEED:
+                grant = 0
+            # --- 부당수익 ---
+            # 시드 대비 순증
             net_vs_seed = int(assets - SEED)
-            # 2) 기본 부당수익 = 총자산 - 시드 - (관리자/출석/미션 지급)
-            #    ※ 롤링은 "허용 한도"에만 소량 반영 (최대 2,000만)
-            roll_allow = int(min(20_000_000, max(0, roll * 0.10)))
+            # 메인: 총자산 - 시드 - 정상지급 (최소 0)
+            unfair = int(max(0, assets - SEED - grant))
+            # 롤링 여유(최대 2,000만) 반영한 보수 수치
+            roll_allow = int(min(20_000_000, max(0, int(roll * 0.10))))
             fair_cap = int(SEED + grant + roll_allow + 300_000)
-            unfair = int(max(0, assets - SEED - grant))  # 관리자 화면에 보여 줄 메인 수치
-            unfair_adj = int(max(0, assets - fair_cap))  # 롤링 여유 반영 보수 수치
-            if unfair_adj > unfair:
-                unfair_adj = unfair
+            unfair_adj = int(max(0, assets - fair_cap))
+            # 세션 대량 수익이 있으면 부당수익 하한으로 반영
+            # (자산은 이미 빠져나갔어도 마감 기록으로 탐지)
 
             # 마감 세션 수익 합 (양수만)
             cps = close_profits.get(uname, [])
