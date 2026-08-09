@@ -180,7 +180,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#0a0610;color:#fff;f
 .help-btns button{flex:1;padding:11px;border:none;border-radius:10px;font-weight:700;cursor:pointer;font-size:.85rem}
 .help-close{background:#333;color:#fff}
 .help-hide{background:linear-gradient(135deg,#5a3040,#3d1a2a);color:#ffd700;border:1px solid #7a4050!important}
-.game-help-btn{position:fixed;top:58px;right:12px;z-index:50;background:rgba(255,215,0,.15);border:1px solid #8a6a20;color:#ffd700;font-size:.72rem;font-weight:700;padding:4px 9px;border-radius:8px;cursor:pointer}
+.game-help-btn{position:fixed;top:58px;left:12px;right:auto;z-index:50;background:rgba(255,215,0,.15);border:1px solid #8a6a20;color:#ffd700;font-size:.72rem;font-weight:700;padding:4px 9px;border-radius:8px;cursor:pointer}
 .limit-hint{font-size:.65rem;color:#888;text-align:center;margin:2px 0 4px}
 
 .hl-stake-wrap{width:100%;max-width:360px;margin:4px 0}
@@ -422,6 +422,18 @@ img,svg,canvas,video{max-width:100%;height:auto}
 .att-cal{margin-top:4px!important;gap:3px!important}
 .att-cal div{padding:4px 0!important;font-size:.6rem!important}
 .sidebar-btn{margin-top:6px!important}
+
+
+/* breathe UI */
+.lobby-container{gap:14px!important;padding:12px 10px 24px!important;justify-content:flex-start!important}
+.lobby-card{padding:14px 12px!important;min-height:56px}
+.lobby-hero{padding:18px 12px 8px!important}
+.lobby-hero h1{font-size:1.35rem!important;letter-spacing:1px}
+.header-bar{padding:10px 12px!important}
+.screen{padding-bottom:12px}
+.control-bar{padding:10px 12px!important;gap:8px}
+.sb-grid{gap:8px!important}
+.sb-grid button{padding:11px 8px!important}
 
 </style>
 </head>
@@ -709,8 +721,7 @@ img,svg,canvas,video{max-width:100%;height:auto}
     <button type="button" onclick="openSeasonRewards()">시즌보상</button>
     <button type="button" onclick="showPatchNotesFromMenu()">패치노트</button>
     <button type="button" onclick="openSettingsModal()">설정</button>
-    <button type="button" onclick="openSafety()">안전장치</button>
-  </div>
+      </div>
 
   <button type="button" class="sb-btn" id="recovery-btn" onclick="claimRecovery()" style="margin-top:4px">파산 재기 지원</button>
   <div id="recovery-hint" style="font-size:.65rem;color:#6b7280;margin-top:2px;display:none"></div>
@@ -723,24 +734,25 @@ img,svg,canvas,video{max-width:100%;height:auto}
 </div>
 </div>
 <div class="screen active" id="screen-lobby">
-<div class="header-bar"><div class="header-left"><div class="header-title" id="header-nickname">ROYAL CASINO</div><div id="diff-banner" class="diff-banner normal">보통 · 96%</div></div><button class="menu-btn" onclick="toggleSidebar(true)">메뉴<span class="menu-unread" data-menu-unread>0</span></button></div>
+<div class="header-bar"><div class="header-left"><div class="header-title" id="header-nickname">ROYAL CASINO</div><div id="diff-banner" class="diff-banner normal">보통 · 96%</div>
+<div style="font-size:.75rem;color:#ffd700;margin-top:2px">보유 ₩<span id="lobby-cash-val">0</span> · 은행 ₩<span id="lobby-bank-val">0</span></div></div><button class="menu-btn" onclick="toggleSidebar(true)">메뉴<span class="menu-unread" data-menu-unread>0</span></button></div>
 <div class="lobby-hero"><h1>ROYAL CASINO</h1><p>티어 · 미션 · 솔로 시뮬레이션</p><p style="font-size:.68rem;color:#6b7280;margin-top:4px">플레이 전 메뉴에서 은행 → 보유금 출금</p></div>
 <div 
 <div id="lobby-roll-box" style="max-width:420px;margin:0 auto 10px;padding:0 14px">
 <div style="display:flex;justify-content:space-between;font-size:.72rem;color:#9ca3af"><span>마감 롤링</span><span id="lobby-roll-text">-</span></div>
 <div class="roll-prog"><i id="lobby-roll-bar"></i></div>
 </div>
-class="lobby-container">
+<div class="lobby-container">
 <div class="lobby-card" onclick="enterGame('baccarat')"><div class="lobby-icon">🃏</div><div class="lobby-info"><div class="lobby-title">바카라</div><div class="lobby-desc">플레이어 · 뱅커 · 타이 · 페어</div></div><div class="lobby-arrow">›</div></div>
 <div class="lobby-card" onclick="enterGame('dragontiger')"><div class="lobby-icon">🐉</div><div class="lobby-info"><div class="lobby-title">용호</div><div class="lobby-desc">드래곤 vs 타이거 · 랜덤 배수</div></div><div class="lobby-arrow">›</div></div>
-<div class="lobby-card" onclick="enterGame('highlow')"><div class="lobby-icon">🔼</div><div class="lobby-info"><div class="lobby-title">하이로우</div><div class="lobby-desc">다음 카드 높낮이 · 캐시아웃</div></div><div class="lobby-arrow">›</div></div>
+<div class="lobby-arrow">›</div></div>
 <div class="lobby-card" onclick="enterGame('roulette')"><div class="lobby-icon">🎡</div><div class="lobby-info"><div class="lobby-title">룰렛</div><div class="lobby-desc">레드 · 블랙 · 제로 · 홀짝</div></div><div class="lobby-arrow">›</div></div>
 <div class="lobby-card" onclick="enterGame('blackjack')"><div class="lobby-icon">🂡</div><div class="lobby-info"><div class="lobby-title">블랙잭</div><div class="lobby-desc">21 만들기 · 히트 · 스탠드</div></div><div class="lobby-arrow">›</div></div>
 <div class="lobby-card" onclick="enterGame('slot')"><div class="lobby-icon">🎰</div><div class="lobby-info"><div class="lobby-title">럭키 슬롯</div><div class="lobby-desc">3릴 잭팟 · 심볼 매치</div></div><div class="lobby-arrow">›</div></div>
 <div class="lobby-card" onclick="enterGame('dice')"><div class="lobby-icon">🎲</div><div class="lobby-info"><div class="lobby-title">주사위 홀짝</div><div class="lobby-desc">두 주사위 합 · 홀/짝 · 오버</div></div><div class="lobby-arrow">›</div></div>
 <div class="lobby-card" onclick="enterGame('crash')"><div class="lobby-icon">🚀</div><div class="lobby-info"><div class="lobby-title">크래시</div><div class="lobby-desc">배수가 터지기 전에 캐시아웃</div></div><div class="lobby-arrow">›</div></div>
 <div class="lobby-card" onclick="enterGame('plinko')"><div class="lobby-icon">🔵</div><div class="lobby-info"><div class="lobby-title">플링코</div><div class="lobby-desc">공을 떨어뜨려 배수 당첨</div></div><div class="lobby-arrow">›</div></div>
-<div class="lobby-card" onclick="enterGame('stock')"><div class="lobby-icon">📈</div><div class="lobby-info"><div class="lobby-title">가상 증권</div><div class="lobby-desc">종목·차트·봇매매 · 급등락</div></div><div class="lobby-arrow">›</div></div>
+<div class="lobby-arrow">›</div></div>
 <div class="lobby-card" onclick="enterGame('poker')"><div class="lobby-icon">♠️</div><div class="lobby-info"><div class="lobby-title">원카드 포커</div><div class="lobby-desc">딜러와 1:1 · 높은 카드 승</div></div><div class="lobby-arrow">›</div></div>
 </div>
 <div class="control-bar"><div class="account-info"><div>보유금: ₩<span id="lobby-cash-val">0</span></div></div><button class="close-btn" onclick="handleCloseGame()">마감</button></div>
@@ -763,12 +775,6 @@ class="lobby-container">
 <div class="chip-bar-wrapper"><div class="chip-bar" id="chip-bar-bacc"></div><button class="action-btn reset-btn" onclick="undoLastBet()" style="background:#444">취소</button><button class="action-btn reset-btn" onclick="resetCurrentBets()">리셋</button></div>
 <div class="bottom-panels"><div class="road-board"><div class="big-road-grid" id="big-road-grid"></div></div></div>
 <div 
-<div class="feat-bar" id="bacc-feat-bar">
-<button type="button" class="feat-btn" onclick="rebetBaccarat()">↻ 다시하기</button>
-<button type="button" class="feat-btn" onclick="doubleBetBaccarat()">×2 더블</button>
-</div>
-<div class="bet-hist" id="bacc-bet-hist"></div>
-<div style="font-size:.7rem;color:#9ca3af;margin-top:4px" id="bacc-road-stats"></div>
 class="control-bar"><div class="account-info"><div>보유금: ₩<span id="cash-val">0</span></div><div>배팅: ₩<span id="bet-val">0</span></div><div>획득: ₩<span id="paid-val">0</span></div></div><button class="close-btn" onclick="handleCloseGame()">마감</button></div></div>
 
 <div class="screen" id="screen-dragontiger">
@@ -787,11 +793,6 @@ class="control-bar"><div class="account-info"><div>보유금: ₩<span id="cash-
 <div class="chip-bar-wrapper"><div class="chip-bar" id="chip-bar-dt"></div><button class="action-btn reset-btn" onclick="undoLastBetDT()" style="background:#444">취소</button><button class="action-btn reset-btn" onclick="resetCurrentBetsDT()">리셋</button></div>
 <div class="bottom-panels"><div class="road-board"><div class="big-road-grid" id="dt-road-grid"></div></div></div>
 <div 
-<div class="feat-bar" id="dt-feat-bar">
-<button type="button" class="feat-btn" onclick="rebetDT()">↻ 다시하기</button>
-<button type="button" class="feat-btn" onclick="doubleBetDT()">×2 더블</button>
-</div>
-<div class="bet-hist" id="dt-bet-hist"></div>
 class="control-bar"><div class="account-info"><div>보유금: ₩<span id="dt-cash-val">0</span></div><div>배팅: ₩<span id="dt-bet-val">0</span></div><div>획득: ₩<span id="dt-paid-val">0</span></div></div><button class="close-btn" onclick="handleCloseGame()">마감</button></div></div>
 
 <div class="screen" id="screen-highlow">
@@ -1250,7 +1251,7 @@ function closeDisclaimer(h){if(h)localStorage.setItem('disclaimer_hide_until',St
 async function checkNotice(){try{const res=await fetch('/api/notice');if(!res.ok)return;const d=await res.json();if(d&&d.id&&d.id!==lastSeenNoticeId&&d.message){const body=document.getElementById('notice-body-text');const ov=document.getElementById('notice-overlay');const card=ov&&ov.querySelector('.notice-card, .login-card, div');if(body) body.innerText=d.message;if(ov){ov.style.display='flex';if(d.important){ov.style.background='rgba(80,0,0,.75)';if(card){card.style.border='2px solid #f87171';card.style.boxShadow='0 0 40px rgba(248,113,113,.35)';}}else{ov.style.background='';if(card){card.style.border='';card.style.boxShadow='';}}}lastSeenNoticeId=d.id;localStorage.setItem('last_seen_notice_id',d.id);}}catch(e){}}
 function closeNoticePopup(){document.getElementById('notice-overlay').style.display='none';}
 function goToScreen(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));const el=document.getElementById(id);if(el)el.classList.add('active');try{toggleSidebar(false);}catch(e){}try{syncAllCashUI();}catch(e){}}
-function enterGame(g){if(checkSuspendedGate())return;if(checkSafetyGate())return;currentGame=g;const hb=document.getElementById('floating-help-btn');if(hb)hb.style.display='block';setTimeout(()=>showHelpFor(g),300);if(g==='baccarat'){goToScreen('screen-baccarat');baccaratLoopRunning=false;setTimeout(function(){if(currentGame!=='baccarat')return;baccaratLoopRunning=true;initBigRoadGrid('big-road-grid');roadMatrix={};lastWinner=null;currentCol=0;currentRow=0;generateRandomHistory('baccarat');startLiveLoop();},30);}else if(g==='dragontiger'){goToScreen('screen-dragontiger');dtLoopRunning=false;setTimeout(function(){if(currentGame!=='dragontiger')return;dtLoopRunning=true;initBigRoadGrid('dt-road-grid');roadMatrixDT={};lastWinnerDT=null;currentColDT=0;currentRowDT=0;generateRandomHistory('dragontiger');startLiveLoopDT();},30);}else if(g==='highlow'){goToScreen('screen-highlow');resetHighLowUI();}else if(g==='roulette')goToScreen('screen-roulette');else if(g==='blackjack'){goToScreen('screen-blackjack');resetBJ();}else if(g==='slot')goToScreen('screen-slot');else if(g==='dice')goToScreen('screen-dice');else if(g==='crash'){goToScreen('screen-crash');resetCrash();}else if(g==='plinko'){goToScreen('screen-plinko');initPlinkoSlots();}else if(g==='stock'){goToScreen('screen-stock');stockEnter();}else if(g==='poker'){goToScreen('screen-poker');resetPoker();}refreshChipBars();syncAllCashUI();if(typeof cash==='number'&&cash<=0){setTimeout(function(){alert('보유금이 없습니다. 메뉴에서 은행 잔고를 출금한 뒤 플레이하세요.');},200);}}
+function enterGame(g){if(checkSuspendedGate())return;currentGame=g;const hb=document.getElementById('floating-help-btn');if(hb)hb.style.display='block';setTimeout(function(){try{showHelpFor(g);}catch(e){}},600);if(g==='baccarat'){goToScreen('screen-baccarat');baccaratLoopRunning=false;setTimeout(function(){if(currentGame!=='baccarat')return;baccaratLoopRunning=true;initBigRoadGrid('big-road-grid');roadMatrix={};lastWinner=null;currentCol=0;currentRow=0;generateRandomHistory('baccarat');startLiveLoop();},30);}else if(g==='dragontiger'){goToScreen('screen-dragontiger');dtLoopRunning=false;setTimeout(function(){if(currentGame!=='dragontiger')return;dtLoopRunning=true;initBigRoadGrid('dt-road-grid');roadMatrixDT={};lastWinnerDT=null;currentColDT=0;currentRowDT=0;generateRandomHistory('dragontiger');startLiveLoopDT();},30);}else if(g==='highlow'){goToScreen('screen-highlow');resetHighLowUI();}else if(g==='roulette')goToScreen('screen-roulette');else if(g==='blackjack'){goToScreen('screen-blackjack');resetBJ();}else if(g==='slot')goToScreen('screen-slot');else if(g==='dice')goToScreen('screen-dice');else if(g==='crash'){goToScreen('screen-crash');resetCrash();}else if(g==='plinko'){goToScreen('screen-plinko');initPlinkoSlots();}else if(g==='stock'){goToScreen('screen-stock');stockEnter();}else if(g==='poker'){goToScreen('screen-poker');resetPoker();}refreshChipBars();syncAllCashUI();if(typeof cash==='number'&&cash<=0){setTimeout(function(){alert('보유금이 없습니다. 메뉴에서 은행 잔고를 출금한 뒤 플레이하세요.');},200);}}
 function exitToLobby(){currentGame=null;const hb=document.getElementById('floating-help-btn');if(hb)hb.style.display='none';goToScreen('screen-lobby');baccaratLoopRunning=false;dtLoopRunning=false;isBettingOpen=false;window._dealingLock=true;isBettingOpenDT=false;}
 function syncAllCashUI(){
   if(window._syncCashScheduled) return;
@@ -1260,7 +1261,7 @@ function syncAllCashUI(){
     try{ _syncAllCashUINow(); }catch(e){}
   });
 }
-function _syncAllCashUINow(){['bank-cash-val','cash-val','lobby-cash-val','dt-cash-val','hl-cash-val','rl-cash-val','bj-cash-val','slot-cash-val','dice-cash-val','crash-cash-val','plinko-cash-val','stock-cash-val','poker-cash-val'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerText=Math.floor(id==='bank-cash-val'?serverCash:cash).toLocaleString();});}
+function _syncAllCashUINow(){['bank-cash-val','cash-val','lobby-cash-val','dt-cash-val','hl-cash-val','rl-cash-val','bj-cash-val','slot-cash-val','dice-cash-val','crash-cash-val','plinko-cash-val','stock-cash-val','poker-cash-val'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerText=Math.floor(id==='bank-cash-val'?serverCash:cash).toLocaleString();});const lb=document.getElementById('lobby-bank-val');if(lb)lb.innerText=Math.floor(serverCash||0).toLocaleString();}
 function checkBrokeReset(){if(cash<=0){cash=0;currentRolling=0;initialWithdraw=0;updateCloseButtonState();try{maybePromptRecovery();}catch(e){}}}
 
 async function autoLogin(username){
@@ -1299,7 +1300,7 @@ async function handleLogin(){const username=document.getElementById('username-in
   alert('서버 통신 오류\n네트워크 상태를 확인하거나 잠시 후 다시 시도해주세요.');
 }}else{try{const res=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password})});const data=await res.json();if(res.ok){if(data.token){authToken=data.token;localStorage.setItem('auth_token',data.token);}localStorage.setItem('bacc_server_user',data.username);applyUserData(data);document.getElementById('login-overlay').style.display='none';goToScreen('screen-lobby');checkNotice();}else alert((data&&data.error)||('로그인 실패 ('+res.status+')'));}catch(e){alert('서버 연결 실패');}}}
 function handleLogout(){if(confirm('로그아웃 하시겠습니까?')){localStorage.removeItem('bacc_server_user');localStorage.removeItem('auth_token');authToken='';;location.reload();}}
-async function processWithdraw(){if(checkSuspendedGate())return;const amt=parseInt(document.getElementById('withdraw-input-amt').value,10);if(isNaN(amt)||amt<=0){alert('올바른 금액을 입력해주세요.');return;}if(amt>serverCash){alert('잔고가 부족합니다.');return;}try{const res=await fetch('/api/withdraw',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:currentUser,amount:amt})});let data={};try{data=await res.json();}catch(e){alert('서버 응답 오류');return;}if(!res.ok){alert(data.error||'출금 실패');return;}serverCash=Math.floor(data.cash||0);cash=Math.floor(data.game_cash||0);if(data.initial_withdraw!=null)initialWithdraw=Math.floor(data.initial_withdraw);document.getElementById('withdraw-input-amt').value='';updateUIValues();updateCloseButtonState();syncAllCashUI();alert('₩'+amt.toLocaleString()+' 출금 완료');toggleSidebar(false);}catch(e){alert('서버 통신 오류');}}
+async function processWithdraw(){if(checkSuspendedGate())return;const amt=parseInt(document.getElementById('withdraw-input-amt').value,10);if(isNaN(amt)||amt<=0){alert('올바른 금액을 입력해주세요.');return;}if(amt>serverCash){alert('잔고가 부족합니다.');return;}try{const res=await fetch('/api/withdraw',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:currentUser,amount:amt})});let data={};try{data=await res.json();}catch(e){alert('서버 응답 오류');return;}if(!res.ok){alert(data.error||'출금 실패');return;}serverCash=Math.floor(data.cash||0);cash=Math.floor(data.game_cash||0);if(data.initial_withdraw!=null)initialWithdraw=Math.floor(data.initial_withdraw);document.getElementById('withdraw-input-amt').value='';updateUIValues();updateCloseButtonState();syncAllCashUI();try{updateLobbyRollBar();}catch(e){}alert('₩'+amt.toLocaleString()+' 출금 완료');toggleSidebar(false);}catch(e){alert('서버 통신 오류');}}
 async function handleCloseGame(){if(cash<=0){alert('마감할 보유금이 없습니다.');return;}const rollNeed=getTierRollNeed();if(currentRolling<rollNeed){alert('롤링 미달 (₩'+currentRolling.toLocaleString()+' / ₩'+rollNeed.toLocaleString()+' · 티어 '+(Math.round(getTierInfo(totalRolling).rollRatio*100))+'%)');return;}const sessionProfit=Math.floor(cash-initialWithdraw);if(!confirm('마감 금액 ₩'+Math.floor(cash).toLocaleString()+' / 순이익 ₩'+sessionProfit.toLocaleString()+'\n은행 잔고로 마감할까요?'))return;try{
 // 1) 서버에 현재 게임머니·롤링 먼저 동기화 (마감 실패/돈 증발 방지)
 _lastUpdatePayload='';
@@ -1817,7 +1818,7 @@ async function startLiveLoop(){
         const cap=document.getElementById('bacc-status-capsule');
         if(cap)cap.innerText='배팅 진행 중 ('+t+'초)';
         if(t<=3)try{sfxTick();}catch(e){}
-        await delay(450);
+        await new Promise(function(r){setTimeout(r,1000);}); // 실제 1초 (빠른모드 무시)
         t--;
       }
       if(!baccaratLoopRunning)break;
@@ -1904,9 +1905,12 @@ function showResultEffect(win,net,total,game){
 function placeBet(type){
   if(!isBettingOpen)return;
   if((type==='PLAYER'&&bets.BANKER>0)||(type==='BANKER'&&bets.PLAYER>0)){
-    if(!window._betWarnLock){window._betWarnLock=true;alert('PLAYER와 BANKER에는 동시에 배팅할 수 없습니다.');setTimeout(()=>window._betWarnLock=false,200);}
+    if(!window._betWarnLock){window._betWarnLock=true;try{alert('PLAYER와 BANKER에는 동시에 배팅할 수 없습니다.');}catch(e){} setTimeout(function(){window._betWarnLock=false;},250);}
     return;
   }
+  if(window._betClickLock)return;
+  window._betClickLock=true;
+  setTimeout(function(){window._betClickLock=false;},30);
   const lim=getTierMaxBet(true);
   let amt=selectedChip==='ALLIN'?Math.min(Math.floor(cash),lim-(bets[type]||0)):Math.floor(Number(selectedChip)||0);
   if(!amt||amt<=0)return;
@@ -1959,7 +1963,7 @@ async function startLiveLoopDT(){
       const c=document.getElementById('dt-status-capsule');
       if(c)c.innerText='배팅 중 '+t+'초 · '+suitObj.name+' '+currentDTMulti+'배';
       if(t<=3)try{sfxTick();}catch(e){}
-      await delay(450);
+      await new Promise(function(r){setTimeout(r,1000);});
       t--;
     }
     if(!dtLoopRunning)break;
@@ -2631,8 +2635,10 @@ function getTierMaxBet(isBacc){
   return Math.floor(base*m);
 }
 function getTierRollNeed(){
-  const r=getTierInfo(totalRolling).rollRatio;
-  return Math.ceil((initialWithdraw||0)*r);
+  const t=getTierInfo(totalRolling||0)||{};
+  let r=t.rollRatio!=null?t.rollRatio:t.roll_ratio;
+  r=Number(r); if(!(r>0)) r=1;
+  return Math.ceil((Number(initialWithdraw)||0)*r);
 }
 function updateTierUI(){
   const t=getTierInfo(totalRolling);
@@ -3369,8 +3375,8 @@ async function startCrash(){
     crashMult=Math.round((crashMult+0.04+crashMult*0.01)*100)/100;
     const el=document.getElementById('crash-mult');
     if(el) el.innerText=crashMult.toFixed(2)+'×';
-    if(ticks>=3 && crashMult>=1.10 && b2) b2.disabled=false;
-    try{const en=document.getElementById('crash-auto-en');const atEl=document.getElementById('crash-auto-at');const at=parseFloat(atEl&&atEl.value);if(en&&en.checked&&at>=1.10&&crashMult>=at&&crashRunning){cashoutCrash();return;}}catch(e){}
+    if(crashMult>=1.05 && b2) b2.disabled=false;
+    try{const en=document.getElementById('crash-auto-en');const atEl=document.getElementById('crash-auto-at');const at=parseFloat(atEl&&atEl.value);if(en&&en.checked&&at>=1.05&&crashMult>=at&&crashRunning){cashoutCrash();return;}}catch(e){}
     if(st && crashMult>=1.10) st.innerText='상승 중... 원하는 때 CASHOUT';
     if(crashMult>=crashAt){
       crashCrashed=true; crashRunning=false;
@@ -3389,7 +3395,7 @@ async function startCrash(){
 }
 async function cashoutCrash(){
   if(!crashRunning||crashCrashed||crashBet<=0)return;
-  if(crashMult < 1.10) return;
+  if(crashMult < 1.05) return;
   crashRunning=false;
   if(crashTimer){ try{ clearInterval(crashTimer); }catch(e){} crashTimer=null; }
   const b2=document.getElementById('crash-cashout-btn'); if(b2) b2.disabled=true;
@@ -3483,6 +3489,8 @@ async function dealPoker(){
 function reportClientError(message, where, stack){
   try{
     if(!message) return;
+    const ms=String(message);
+    if(/audio device|NotAllowedError|NotSupportedError|play\(\) failed/i.test(ms)) return;
     const key = String(message).slice(0,80)+'|'+(where||'');
     window._errReportMap = window._errReportMap || {};
     const now = Date.now();
