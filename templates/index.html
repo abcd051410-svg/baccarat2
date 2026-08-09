@@ -602,6 +602,7 @@ html,body{height:100%;overflow:hidden;margin:0}
 <button type="button" class="admin-tab" data-admin-tab="tools" onclick="switchAdminTab('tools')">⚙️ 도구</button>
 <button type="button" class="admin-tab" data-admin-tab="fraud" onclick="switchAdminTab('fraud')">🚨 탐지</button>
 <button type="button" class="admin-tab" data-admin-tab="errors" onclick="switchAdminTab('errors')">🐞 에러</button>
+<button type="button" class="admin-tab" data-admin-tab="logs" onclick="switchAdminTab('logs')">📜 로그</button>
 </div>
 <div class="admin-pane active" id="admin-pane-users">
 <div style="font-size:.75rem;color:#888;margin-bottom:8px">아이디 · 이름 · 잔액 · 추가/차감/정지</div>
@@ -684,6 +685,23 @@ html,body{height:100%;overflow:hidden;margin:0}
 <textarea id="admin-broadcast-body" class="login-input" rows="3" placeholder="전체 쪽지 내용" style="width:100%;min-height:72px;resize:vertical;margin-bottom:8px"></textarea>
 <button type="button" class="login-btn" style="background:linear-gradient(135deg,#8b5cf6,#6d28d9);color:#fff" onclick="adminBroadcastMessage()">전체 쪽지 보내기</button>
 </div>
+<div class="admin-pane" id="admin-pane-logs">
+<div class="admin-section-title">📜 전체 로그</div>
+<div style="font-size:.72rem;color:#9ca3af;margin-bottom:8px">배팅 · 입출금 · 클라이언트 에러를 조회합니다.</div>
+<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+<input id="admin-log-user" class="login-input" placeholder="아이디 필터 (선택)" style="flex:1;min-width:120px">
+<select id="admin-log-kind" class="login-input" style="width:auto">
+<option value="all">전체</option>
+<option value="bets">배팅만</option>
+<option value="tx">거래만</option>
+<option value="errors">에러만</option>
+</select>
+<button type="button" class="login-btn" style="background:#4b5563;color:#fff;width:auto;padding:8px 12px" onclick="loadAdminLogs()">조회</button>
+</div>
+<div id="admin-logs-summary" style="font-size:.78rem;color:#cbd5e1;margin-bottom:8px"></div>
+<div id="admin-logs-list" style="max-height:420px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;font-size:.75rem"></div>
+</div>
+
 
 
 </div></div>
@@ -2734,7 +2752,7 @@ function switchAdminTab(tab){
   document.querySelectorAll('.admin-pane').forEach(p=>{
     p.classList.toggle('active', p.id==='admin-pane-'+tab);
   });
-  if(tab==='users') loadAdminUsers();if(tab==='tools'){renderDifficultyBanner();fetchDifficulty(true);loadAdminDashboard();}if(tab==='fraud') loadFraudScan();if(tab==='errors') loadAdminErrors();
+  if(tab==='users') loadAdminUsers();if(tab==='tools'){renderDifficultyBanner();fetchDifficulty(true);loadAdminDashboard();}if(tab==='fraud') loadFraudScan();if(tab==='errors') loadAdminErrors();if(tab==='logs') loadAdminLogs();
 }
 let userInfoTarget=null;
 function openUserInfo(u){
@@ -3380,7 +3398,7 @@ async function startCrash(){
     if(st) st.innerText='즉시 크래시';
     const rr=document.getElementById('crash-result');
     if(rr){rr.innerText='-₩'+amt.toLocaleString(); rr.style.color='#ef4444';}
-    try{pushCrashHist(typeof crashAt!=='undefined'?crashAt:1,false);}catch(e){} await finalizeCrashLoss();
+    try{pushCrashHist(typeof crashAt!=='undefined'?crashAt:1,false);logBet('crash',crashBet,0,'crash@'+(crashAt||''));}catch(e){} await finalizeCrashLoss();
     return;
   }
   let ticks=0;
@@ -3420,7 +3438,7 @@ async function cashoutCrash(){
   const st=document.getElementById('crash-status'); if(st) st.innerText='CASHOUT '+crashMult.toFixed(2)+'×';
   const rr=document.getElementById('crash-result');
   if(rr){rr.innerText=(profit>=0?'+':'')+'₩'+profit.toLocaleString(); rr.style.color=profit>=0?'#4ade80':'#ef4444';}
-  try{pushCrashHist(crashMult,true);}catch(e){} await finalizeCrashWin(pay);
+  try{pushCrashHist(crashMult,true);logBet('crash',crashBet,pay,'cashout x'+crashMult);}catch(e){} await finalizeCrashWin(pay);
 }
 
 
@@ -3543,6 +3561,89 @@ window.addEventListener('unhandledrejection', function(ev){
     reportClientError(msg, 'unhandledrejection', st);
   }catch(e){}
 });
+
+
+function logBet(game, stake, payout, meta){
+  try{
+    stake=Math.floor(stake||0); payout=Math.floor(payout||0);
+    if(!currentUser) return;
+    if(stake<=0 && payout<=0) return;
+    const body={
+      username: currentUser,
+      game: String(game||'unknown').slice(0,40),
+      stake: stake,
+      payout: payout,
+      net: payout-stake,
+      meta: typeof meta==='string' ? meta.slice(0,500) : JSON.stringify(meta||{}).slice(0,500)
+    };
+    authFetch('/api/bet_log',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(body),
+      keepalive:true,
+      timeoutMs:4000
+    }).catch(function(){});
+  }catch(e){}
+}
+
+async function loadAdminLogs(){
+  const box=document.getElementById('admin-logs-list');
+  const sum=document.getElementById('admin-logs-summary');
+  const user=(document.getElementById('admin-log-user')||{}).value||'';
+  const kind=(document.getElementById('admin-log-kind')||{}).value||'all';
+  if(box) box.innerHTML='불러오는 중...';
+  try{
+    const res=await authFetch('/api/admin/logs',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({pw:'abcd051410',admin_user:'abcd051410',token:authToken,username:user.trim(),kind:kind,limit:150})
+    });
+    const data=await res.json().catch(()=>({}));
+    if(!res.ok){ if(box) box.innerHTML='실패: '+(data.error||res.status); return; }
+    const bets=data.bets||[], tx=data.transactions||[], errs=data.errors||[];
+    if(sum) sum.innerHTML='배팅 <b>'+bets.length+'</b> · 거래 <b>'+tx.length+'</b> · 에러 <b>'+errs.length+'</b>';
+    if(!box) return;
+    box.innerHTML='';
+    function addCard(title, body, color){
+      const el=document.createElement('div');
+      el.style.cssText='background:rgba(0,0,0,.28);border-left:3px solid '+color+';border-radius:8px;padding:8px 10px;line-height:1.4';
+      el.innerHTML='<div style="color:#94a3b8;font-size:.68rem;margin-bottom:2px">'+title+'</div>'+body;
+      box.appendChild(el);
+    }
+    bets.forEach(function(b){
+      const net=Math.floor(b.net||0);
+      addCard(
+        (b.created_at||'')+' · 배팅 · '+(b.username||''),
+        '<b style="color:#ffd700">'+(b.game||'')+'</b> 배팅 ₩'+Math.floor(b.stake||0).toLocaleString()+
+        ' → 지급 ₩'+Math.floor(b.payout||0).toLocaleString()+
+        ' · 손익 <b style="color:'+(net>=0?'#4ade80':'#f87171')+'">'+(net>=0?'+':'')+net.toLocaleString()+'</b>'+
+        (b.meta? '<div style="color:#6b7280;margin-top:2px">'+String(b.meta).replace(/[<>]/g,'')+'</div>':''),
+        net>=0?'#4ade80':'#f87171'
+      );
+    });
+    tx.forEach(function(t){
+      const amt=Math.floor(t.amount||0);
+      addCard(
+        (t.created_at||'')+' · 거래 · '+(t.username||''),
+        '<b>'+(t.kind||'')+'</b> ₩'+amt.toLocaleString()+
+        ' · 잔고 ₩'+Math.floor(t.balance_after||0).toLocaleString()+
+        (t.memo? '<div style="color:#6b7280">'+String(t.memo).replace(/[<>]/g,'')+'</div>':''),
+        '#60a5fa'
+      );
+    });
+    errs.forEach(function(e){
+      const t=e.ts? new Date(e.ts*1000).toLocaleString():'';
+      addCard(
+        t+' · 에러 · '+(e.username||''),
+        '<span style="color:#fca5a5">'+(e.message||'')+'</span><div style="color:#6b7280">'+(e.where||'')+'</div>',
+        '#ef4444'
+      );
+    });
+    if(!bets.length && !tx.length && !errs.length){
+      box.innerHTML='<div style="color:#86efac;padding:8px">기록 없음 (배팅은 배포 후 플레이분부터 쌓입니다)</div>';
+    }
+  }catch(e){ if(box) box.innerHTML='서버 오류'; }
+}
 
 async function loadAdminErrors(){
   const box=document.getElementById('admin-errors-list');
