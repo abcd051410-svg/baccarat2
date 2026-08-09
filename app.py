@@ -32,6 +32,8 @@ AUTH_TOKENS = {}
 TOKEN_TTL = 60 * 60 * 24 * 7  # 7 days
 
 # ===== 공유 상태 (메모리) =====
+CLIENT_ERROR_LOGS = []  # 최근 클라이언트/서버 에러 (관리자 조회)
+CLIENT_ERROR_LOCK = __import__('threading').Lock()
 CURRENT_NOTICE = {"id": "", "message": "", "created_at": 0}
 CURRENT_PATCH = {"id": "", "title": "", "date": "", "body": "", "created_at": 0}
 FORCE_RELOAD = {"id": 0, "message": ""}
@@ -3420,6 +3422,143 @@ def admin_season_end():
 
 
 
+
+
+
+
+@app.route("/api/client_error", methods=["POST"])
+def report_client_error():
+    """유저/클라이언트 오류 수집 → 관리자 중요 공지·에러 목록"""
+    global CURRENT_NOTICE, CLIENT_ERROR_LOGS
+    try:
+        data = request.get_json(silent=True) or {}
+        username = (data.get("username") or "anonymous").strip()[:50]
+        msg = (data.get("message") or data.get("error") or "unknown").strip()[:500]
+        stack = (data.get("stack") or "")[:1500]
+        where = (data.get("where") or data.get("source") or "client")[:120]
+        url = (data.get("url") or "")[:200]
+        if not msg:
+            return jsonify({"success": True, "skipped": True})
+        entry = {
+            "id": int(time.time() * 1000) % 1000000000,
+            "ts": time.time(),
+            "username": username,
+            "message": msg,
+            "stack": stack,
+            "where": where,
+            "url": url,
+            "read": False,
+        }
+        with CLIENT_ERROR_LOCK:
+            CLIENT_ERROR_LOGS.insert(0, entry)
+            del CLIENT_ERROR_LOGS[200:]  # 최근 200개
+            unread = sum(1 for e in CLIENT_ERROR_LOGS if not e.get("read"))
+        # 중요 공지(관리자 로그인 시 확인용) — 짧은 요약
+        CURRENT_NOTICE = {
+            "id": f"err-{entry['id']}",
+            "message": f"⚠️ [오류] {username}: {msg[:120]}",
+            "important": True,
+            "type": "error",
+            "created_at": time.time(),
+        }
+        return jsonify({"success": True, "unread": unread})
+    except Exception as e:
+        print("client_error report fail", e)
+        return jsonify({"success": False}), 200  # 에러 리포트 실패로 유저 UX 깨지 않게
+
+
+@app.route("/api/admin/errors", methods=["GET", "POST"])
+def admin_list_errors():
+    """관리자 에러 로그 조회"""
+    try:
+        auth_admin, err = require_admin()
+        if err:
+            return err
+        data = request.get_json(silent=True) or {}
+        mark_read = bool(data.get("mark_read"))
+        with CLIENT_ERROR_LOCK:
+            items = list(CLIENT_ERROR_LOGS)
+            if mark_read:
+                for e in CLIENT_ERROR_LOGS:
+                    e["read"] = True
+        return jsonify({
+            "success": True,
+            "count": len(items),
+            "unread": sum(1 for e in items if not e.get("read")),
+            "items": items[:100],
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/admin/errors/clear", methods=["POST"])
+def admin_clear_errors():
+    try:
+        auth_admin, err = require_admin()
+        if err:
+            return err
+        with CLIENT_ERROR_LOCK:
+            CLIENT_ERROR_LOGS.clear()
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/admin/broadcast_message", methods=["POST"])
+def admin_broadcast_message():
+    """관리자 → 전체 유저 쪽지"""
+    try:
+        auth_admin, err = require_admin()
+        if err:
+            return err
+        data = request.get_json(silent=True) or {}
+        body = (data.get("body") or data.get("message") or "").strip()
+        if not body:
+            return jsonify({"error": "쪽지 내용이 비어 있습니다."}), 400
+        if len(body) > 1000:
+            return jsonify({"error": "1000자 이내로 작성해주세요."}), 400
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT username FROM users WHERE username <> %s", (ADMIN_USER,))
+        users = [r[0] for r in (cursor.fetchall() or [])]
+        sent = 0
+        for uname in users:
+            try:
+                cursor.execute(
+                    """
+                    INSERT INTO messages (from_user, to_user, body, is_read)
+                    VALUES (%s, %s, %s, FALSE)
+                    """,
+                    (ADMIN_USER, uname, body),
+                )
+                sent += 1
+            except Exception as e:
+                print("broadcast insert", uname, e)
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
+                try:
+                    cursor.execute(
+                        """
+                        INSERT INTO messages (from_user, to_user, body)
+                        VALUES (%s, %s, %s)
+                        """,
+                        (ADMIN_USER, uname, body),
+                    )
+                    sent += 1
+                except Exception as e2:
+                    print("broadcast fallback", e2)
+                    try:
+                        conn.rollback()
+                    except Exception:
+                        pass
+        conn.commit()
+        cursor.close(); release_db(conn)
+        return jsonify({"success": True, "sent": sent, "total_users": len(users)})
+    except Exception as e:
+        print("broadcast error", e)
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/api/admin/fraud", methods=["GET", "POST"])
