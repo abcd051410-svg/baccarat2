@@ -1412,7 +1412,8 @@ def api_close_session():
             client_roll = int(client_roll) if client_roll is not None else cur_roll
         except (TypeError, ValueError):
             client_roll = cur_roll
-        use_roll = max(cur_roll, min(client_roll, cur_roll + 50_000_000))
+        # 서버 롤링 우선, 클라 값은 보조(동기화 지연 보정, 상한 제한)
+        use_roll = max(cur_roll, min(max(0, client_roll), cur_roll + 20_000_000))
         if need > 0 and use_roll < need:
             cursor.close(); release_db(conn)
             return jsonify({"error": f"롤링 미달 (₩{use_roll:,} / ₩{need:,})"}), 400
@@ -2658,11 +2659,15 @@ def admin_bulk_set_assets():
 
 
 
-@app.route("/api/missions", methods=["GET"])
+@app.route("/api/missions", methods=["GET", "POST"])
 def get_missions():
     """일일 미션 목록 + 진행도"""
     try:
-        username = (request.args.get("user") or "").strip()
+        data = request.get_json(silent=True) or {}
+        username = (request.args.get("user") or data.get("username") or "").strip()
+        auth_u, _err = require_user()
+        if auth_u:
+            username = auth_u
         if not username:
             return jsonify({"error": "user required"}), 400
         today = kst_today()
@@ -3397,6 +3402,27 @@ def admin_dashboard():
 
 
 
+
+
+@app.errorhandler(Exception)
+def APP_ERROR_HANDLER(e):
+    try:
+        from werkzeug.exceptions import HTTPException
+        if isinstance(e, HTTPException):
+            return e
+    except Exception:
+        pass
+    print(f"UNHANDLED: {e}")
+    return jsonify({"error": "서버 내부 오류", "detail": str(e)[:200]}), 500
+
+
+@app.errorhandler(404)
+def not_found(e):
+    if request.path.startswith("/api/"):
+        return jsonify({"error": "not found", "path": request.path}), 404
+    return e
+
+
 if __name__ == "__main__":
     init_db()
     try:
@@ -3404,3 +3430,4 @@ if __name__ == "__main__":
     except Exception as _se:
         print(f"season load: {_se}")
     app.run(host="0.0.0.0", port=5000, debug=False, threaded=True)
+
