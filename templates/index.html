@@ -9,7 +9,7 @@
 html,body{width:100%;height:100%;overflow:hidden;background:#0a0610;color:#fff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
 .screen{width:100%;height:100dvh;display:none;flex-direction:column;justify-content:space-between;position:relative;padding:calc(env(safe-area-inset-top)+8px) 12px calc(env(safe-area-inset-bottom)+8px) 12px;background:radial-gradient(ellipse at 50% 0%,#4a1530 0%,#1a0814 45%,#08040c 100%)}
 .screen.active{display:flex}
-.login-overlay,.admin-modal-overlay,.notice-overlay,.disclaimer-overlay{position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:1000;display:flex;align-items:center;justify-content:center;padding:18px;backdrop-filter:blur(6px)}
+.login-overlay,.admin-modal-overlay,.notice-overlay,.disclaimer-overlay{position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:13000;display:flex;align-items:center;justify-content:center;padding:18px;backdrop-filter:blur(6px)}
 .login-card,.admin-card,.notice-card,.disclaimer-card{background:linear-gradient(165deg,#1e0c18,#120810);border:1.5px solid rgba(255,215,0,.45);border-radius:16px;padding:22px;width:100%;max-width:360px;display:flex;flex-direction:column;gap:12px;box-shadow:0 0 40px rgba(255,215,0,.12),0 20px 50px rgba(0,0,0,.6);text-align:center}
 .login-title{font-size:1.15rem;font-weight:800;color:#ffd700;letter-spacing:.5px}
 .login-input{width:100%;padding:12px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:10px;color:#fff;font-size:1rem;text-align:center;outline:none}
@@ -24,7 +24,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#0a0610;color:#fff;f
 .admin-user-top{display:flex;justify-content:space-between;align-items:flex-start}
 .admin-user-meta{font-size:.72rem;color:#999;line-height:1.45;margin-top:3px}
 .admin-actions{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
-.admin-action-btn{padding:6px 11px;border-radius:6px;font-size:.75rem;font-weight:700;border:none;cursor:pointer}
+.admin-action-btn{padding:6px 11px;border-radius:6px;font-size:.75rem;font-weight:700;border:none;cursor:pointer;pointer-events:auto;position:relative;z-index:2}
 .btn-add{background:#059669;color:#fff}.btn-del{background:#dc2626;color:#fff}
 .admin-section-title{font-size:.88rem;color:#ffd700;font-weight:800;margin-top:4px}
 .admin-notice-input{width:100%;min-height:68px;padding:10px;background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.15);border-radius:8px;color:#fff;font-size:.9rem;resize:vertical;outline:none}
@@ -305,9 +305,9 @@ img,svg,canvas,video{max-width:100%;height:auto}
 .user-info-row span:last-child{color:#eee;font-weight:700}
 .user-info-actions{display:flex;gap:8px;margin-top:14px}
 .user-info-actions button{flex:1;padding:11px;border:none;border-radius:10px;font-weight:800;cursor:pointer;font-size:.82rem}
-.admin-card{max-width:min(560px,96vw)!important;width:100%;max-height:92vh!important}
+.admin-card{max-width:min(560px,96vw)!important;width:100%;max-height:92vh!important;overflow-y:auto;pointer-events:auto;position:relative;z-index:13001}
 .admin-tabs{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 12px}
-.admin-tab{flex:1;min-width:72px;padding:10px 8px;border-radius:10px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.04);color:#aaa;font-weight:700;font-size:.78rem;cursor:pointer;text-align:center}
+.admin-tab{flex:1;min-width:72px;padding:10px 8px;border-radius:10px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.04);color:#aaa;font-weight:700;font-size:.78rem;cursor:pointer;pointer-events:auto;position:relative;z-index:2;text-align:center}
 .admin-tab.active{background:rgba(255,215,0,.15);border-color:#ffd700;color:#ffd700}
 .admin-pane{display:none}
 .admin-pane.active{display:block}
@@ -374,7 +374,7 @@ img,svg,canvas,video{max-width:100%;height:auto}
 
 
 /* 패치 노트 팝업 */
-.patch-overlay{position:fixed;inset:0;z-index:12000;background:rgba(0,0,0,.82);display:none;align-items:center;justify-content:center;padding:18px}
+.patch-overlay{position:fixed;inset:0;z-index:11000;background:rgba(0,0,0,.82);display:none;align-items:center;justify-content:center;padding:18px}
 .patch-card{width:min(440px,96vw);max-height:86vh;overflow:auto;background:linear-gradient(165deg,#1a1024 0%,#120818 50%,#0c0810 100%);border:1.5px solid rgba(255,215,0,.45);border-radius:18px;padding:22px 18px 16px;box-shadow:0 24px 60px rgba(0,0,0,.65);color:#eee}
 .patch-badge{display:inline-block;background:linear-gradient(135deg,#ffd700,#c9a227);color:#1a0a00;font-weight:900;font-size:.72rem;padding:4px 10px;border-radius:999px;letter-spacing:.04em}
 .patch-title{font-size:1.35rem;font-weight:900;color:#ffd700;margin:10px 0 6px;line-height:1.25}
@@ -1409,11 +1409,46 @@ function renderRanking(users,tab){
     c.appendChild(item);
   });
 }
-function openAdminPanel(){if(currentUser!=='abcd051410'){alert('권한이 없습니다.');return;}toggleSidebar(false);adminPwCache='abcd051410';document.getElementById('admin-login-card').style.display='none';document.getElementById('admin-panel-card').style.display='flex';document.getElementById('admin-modal').style.display='flex';loadAdminUsers();}
+function openAdminPanel(){if(currentUser!=='abcd051410'){alert('권한이 없습니다.');return;}toggleSidebar(false);try{var po=document.getElementById('patch-overlay');if(po)po.style.display='none';}catch(e){}adminPwCache='abcd051410';document.getElementById('admin-login-card').style.display='none';document.getElementById('admin-panel-card').style.display='flex';document.getElementById('admin-modal').style.display='flex';loadAdminUsers();}
 async function loadAdminUsers(){try{const res=await authFetch('/api/admin/users?pw=abcd051410');if(!res.ok){const err=await res.json().catch(()=>({}));alert('유저 목록 실패 ('+res.status+') '+(err.error||''));return;}const users=await res.json();if(!Array.isArray(users)){alert('유저 목록 형식 오류');return;}renderAdminUsers(users,'');}catch(e){console.error(e);alert('유저 목록 서버 오류: '+(e.message||e));}}
 async function verifyAdminPassword(){openAdminPanel();}
 function openAdminAuthModal(){openAdminPanel();}
 function closeAdminModal(){document.getElementById('admin-modal').style.display='none';}
+
+async function adminAddCash(username, _pw, sign){
+  try{
+    sign = Number(sign)||1;
+    const label = sign>=0 ? '추가' : '차감';
+    const raw = prompt('['+username+'] 은행 잔고 '+label+' 금액(원):');
+    if(raw===null) return;
+    const amt = Math.floor(Number(String(raw).replace(/,/g,''))||0);
+    if(!amt || amt<=0){ alert('금액을 확인하세요'); return; }
+    const delta = sign>=0 ? amt : -amt;
+    // 현재 유저 잔고 조회
+    let users=[];
+    try{
+      const res=await authFetch('/api/admin/users?pw=abcd051410');
+      if(res.ok) users=await res.json();
+    }catch(e){}
+    const u=(Array.isArray(users)?users:[]).find(x=>x.username===username)||{};
+    const cur=Math.floor(Number(u.cash)||0);
+    const next=Math.max(0, cur+delta);
+    if(!confirm('['+username+'] 은행 ₩'+cur.toLocaleString()+' → ₩'+next.toLocaleString()+'\n('+(delta>=0?'+':'' )+delta.toLocaleString()+')')) return;
+    const res=await authFetch('/api/admin/edit',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({pw:'abcd051410',admin_user:'abcd051410',username,cash:next})
+    });
+    const data=await res.json().catch(()=>({}));
+    if(!res.ok){ alert(data.error||('실패 '+res.status)); return; }
+    alert('반영 완료: ₩'+next.toLocaleString());
+    loadAdminUsers();
+  }catch(e){
+    console.error(e);
+    alert('서버 오류: '+(e.message||e));
+  }
+}
+
 function renderAdminUsers(users,pw){
 const box=document.getElementById('admin-user-list-container');
 if(!box)return;
@@ -1452,12 +1487,20 @@ sorted.forEach(u=>{
       '<button class="admin-action-btn" style="background:#4b5563;color:#fff" data-act="suspend">'+(u.suspended?'해제':'정지')+'</button>'+
       '<button class="admin-action-btn" style="background:#7c3aed;color:#fff" data-act="rename">이름</button>'+
     '</div>';
-  item.querySelector('[data-act="add"]').onclick=function(){adminAddCash(u.username,'',1);};
-  item.querySelector('[data-act="sub"]').onclick=function(){adminAddCash(u.username,'',-1);};
-  item.querySelector('[data-act="assets"]').onclick=function(){adminSetUserAssets(u.username);};
-  item.querySelector('[data-act="rolling"]').onclick=function(){adminSetUserRolling(u.username);};
-  item.querySelector('[data-act="suspend"]').onclick=function(){adminToggleSuspend(u.username,!u.suspended);};
-  item.querySelector('[data-act="rename"]').onclick=function(){adminRenameUser(u.username);};
+  function bindAct(sel, fn){
+    const el=item.querySelector(sel);
+    if(!el) return;
+    el.onclick=function(ev){
+      try{ if(ev){ ev.preventDefault(); ev.stopPropagation(); } }catch(e){}
+      try{ fn(); }catch(err){ console.error(err); alert('버튼 오류: '+(err && err.message ? err.message : err)); }
+    };
+  }
+  bindAct('[data-act="add"]', function(){ adminAddCash(u.username,'',1); });
+  bindAct('[data-act="sub"]', function(){ adminAddCash(u.username,'',-1); });
+  bindAct('[data-act="assets"]', function(){ adminSetUserAssets(u.username); });
+  bindAct('[data-act="rolling"]', function(){ adminSetUserRolling(u.username); });
+  bindAct('[data-act="suspend"]', function(){ adminToggleSuspend(u.username,!u.suspended); });
+  bindAct('[data-act="rename"]', function(){ adminRenameUser(u.username); });
   box.appendChild(item);
 });
 }
