@@ -1268,6 +1268,10 @@ def update_user():
             game_cash = None
         if game_cash is not None and game_cash < 0:
             game_cash = 0
+        # 절대 상한 (클라이언트 조작 방지)
+        MAX_GAME_CASH = 50_000_000
+        if game_cash is not None and game_cash > MAX_GAME_CASH:
+            game_cash = MAX_GAME_CASH
         if cash is not None and cash < 0:
             cash = 0
 
@@ -1293,6 +1297,11 @@ def update_user():
             final_game = db_game
         else:
             final_game = max(0, int(game_cash))
+            # 1회 동기화 급증 제한 (시드/출금 제외한 비정상 점프 차단)
+            if final_game > db_game + 20_000_000:
+                final_game = db_game + 20_000_000
+            if final_game > 50_000_000:
+                final_game = 50_000_000
 
         if cash is not None:
             c = int(cash)
@@ -3846,26 +3855,8 @@ def admin_fraud_recover():
             new_tprofit = 0
             season_cut = None
         else:
-            # 부당수익만 회수: 자산을 fair_cap으로
-            recovered = unfair
-            target = fair_cap
-            # 게임머니 먼저 회수, 부족하면 은행
-            if game >= recovered:
-                new_game = game - recovered
-                new_cash = cash
-            else:
-                new_game = 0
-                new_cash = max(0, cash - (recovered - game))
-            # 최종 합이 target 되도록 보정
-            if new_cash + new_game > target:
-                overflow = new_cash + new_game - target
-                if new_game >= overflow:
-                    new_game -= overflow
-                else:
-                    overflow -= new_game
-                    new_game = 0
-                    new_cash = max(0, new_cash - overflow)
-            # 랭킹 삭감: 부당비율만큼 롤링·총수익 삭감
+            # 부당수익 회수: 랭킹 삭감 후 정상상한을 다시 계산해 자산=상한 → 부당수익 0
+            recovered = int(unfair)
             if assets > 0 and recovered > 0:
                 ratio = min(1.0, recovered / float(assets))
             else:
@@ -3874,6 +3865,16 @@ def admin_fraud_recover():
             new_cur_roll = int(max(0, cur_roll * (1.0 - ratio)))
             new_tprofit = int(max(0, tprofit * (1.0 - ratio)))
             season_cut = ratio
+            # 삭감된 롤링 기준으로 정상상한 재계산 (회수 후 부당수익=0 보장)
+            roll_allow2 = int(min(50_000_000, max(0, int(new_total_roll * 0.25))))
+            target = int(SEED + grant + roll_allow2)
+            if target < SEED:
+                target = SEED
+            # 자산 전액 은행으로 두고 게임머니 0 (상한에 맞춤)
+            new_cash = int(target)
+            new_game = 0
+            recovered = int(max(0, assets - target))
+            fair_cap = target  # 응답/로그용
 
         # season_points 컬럼 있으면 삭감
         season_before = 0
