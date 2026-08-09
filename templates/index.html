@@ -3352,7 +3352,7 @@ async function loadFraudScan(){
       if(box) box.innerHTML='<div style="color:#f87171">실패: '+(data.error||res.status)+'</div>';
       return;
     }
-    const users=data.users||[];
+    const users=(data.users||[]).map(u=>{const net=Math.floor(u.net_vs_seed!=null?u.net_vs_seed:((u.assets||0)-1000000));const up=Math.floor(u.unfair_profit||0);if(up<=0&&net>500000){u.unfair_profit=net;u._unfair_fallback=1;}return u;});
     if(sum){
       sum.innerHTML=
         '검사 유저 <b style="color:#fff">'+Math.floor(data.scanned_users||0)+'</b>명 · '+
