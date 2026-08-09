@@ -3364,6 +3364,180 @@ def admin_season_end():
 
 
 
+
+
+@app.route("/api/admin/fraud", methods=["GET", "POST"])
+def admin_fraud_scan():
+    """부정행위·버그악용 탐지 + 부당수익 추정"""
+    try:
+        auth_admin, err = require_admin()
+        if err:
+            return err
+        data = request.get_json(silent=True) or {}
+        SEED = 1_000_000
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        try:
+            ensure_user_columns(cursor, conn)
+        except Exception:
+            pass
+
+        try:
+            cursor.execute(
+                """
+                SELECT username, COALESCE(display_name,''), COALESCE(cash,0), COALESCE(game_cash,0),
+                       COALESCE(total_rolling,0), COALESCE(total_profit,0), COALESCE(last_seen,0)
+                FROM users
+                WHERE username <> %s
+                """,
+                (ADMIN_USER,),
+            )
+        except Exception:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            cursor.execute(
+                "SELECT username, COALESCE(display_name,''), COALESCE(cash,0), COALESCE(game_cash,0), 0, 0, 0 FROM users WHERE username <> %s",
+                (ADMIN_USER,),
+            )
+        users = cursor.fetchall() or []
+
+        # transactions aggregate per user
+        grants = {}  # username -> sum of admin grants
+        close_profits = {}  # username -> list of session profits from memo
+        try:
+            cursor.execute(
+                """
+                SELECT username, kind, amount, COALESCE(memo,''), created_at
+                FROM transactions
+                WHERE username <> %s
+                ORDER BY id DESC
+                LIMIT 5000
+                """,
+                (ADMIN_USER,),
+            )
+            txs = cursor.fetchall() or []
+        except Exception:
+            txs = []
+
+        import re as _re
+        for row in txs:
+            uname = row[0]
+            kind = row[1] or ""
+            amount = int(row[2] or 0)
+            memo = row[3] or ""
+            if kind in ("전체지급", "관리자지급", "관리자입금", "재기지원"):
+                grants[uname] = grants.get(uname, 0) + max(0, amount)
+            if kind == "출석보상":
+                grants[uname] = grants.get(uname, 0) + max(0, amount)
+            if kind == "미션보상":
+                grants[uname] = grants.get(uname, 0) + max(0, amount)
+            if kind == "마감":
+                # memo: 세션수익 12345
+                m = _re.search(r"세션수익\s*(-?\d+)", memo)
+                if m:
+                    sp = int(m.group(1))
+                    close_profits.setdefault(uname, []).append(sp)
+
+        results = []
+        now = time.time()
+        for r in users:
+            uname = r[0]
+            name = r[1] or uname
+            cash = int(r[2] or 0)
+            game = int(r[3] or 0)
+            roll = int(r[4] or 0)
+            tprofit = int(r[5] or 0)
+            last_seen = float(r[6] or 0)
+            assets = cash + game
+            grant = int(grants.get(uname, 0))
+            # 정상 기대 상한: 시드 + 지급/출석/미션 + 롤링의 일부(운 좋은 플레이)
+            fair_cap = SEED + grant + min(roll, max(0, int(roll * 0.15))) + 500_000
+            unfair = max(0, assets - fair_cap)
+            # 마감 세션 수익 합 (양수만)
+            cps = close_profits.get(uname, [])
+            close_pos = sum(x for x in cps if x > 0)
+            close_max = max(cps) if cps else 0
+            close_big = sum(1 for x in cps if x >= 3_000_000)
+
+            flags = []
+            score = 0
+            if unfair >= 5_000_000:
+                flags.append("고액_부당수익")
+                score += 40
+            elif unfair >= 1_000_000:
+                flags.append("부당수익_의심")
+                score += 20
+            if close_max >= 10_000_000:
+                flags.append("초대형_세션수익")
+                score += 35
+            elif close_max >= 3_000_000:
+                flags.append("대형_세션수익")
+                score += 20
+            if close_big >= 2:
+                flags.append("반복_대량마감")
+                score += 25
+            if assets >= 5_000_000 and roll < max(100_000, assets // 20):
+                flags.append("저롤링_고자산")
+                score += 25
+            if tprofit >= 10_000_000 and assets >= 10_000_000:
+                flags.append("고액_total_profit")
+                score += 15
+            if assets >= 20_000_000:
+                flags.append("자산_2천만이상")
+                score += 10
+
+            if not flags and unfair < 500_000:
+                continue
+
+            risk = "CRITICAL" if score >= 60 else ("HIGH" if score >= 35 else ("MEDIUM" if score >= 15 else "LOW"))
+            results.append({
+                "username": uname,
+                "display_name": name,
+                "cash": cash,
+                "game_cash": game,
+                "assets": assets,
+                "total_rolling": roll,
+                "total_profit": tprofit,
+                "admin_grants": grant,
+                "fair_cap": int(fair_cap),
+                "unfair_profit": int(unfair),
+                "close_profit_sum": int(close_pos),
+                "close_profit_max": int(close_max),
+                "close_big_count": int(close_big),
+                "flags": flags,
+                "score": score,
+                "risk": risk,
+                "last_seen": last_seen,
+                "online": (now - last_seen) < 90 if last_seen else False,
+                "tier": get_tier(roll),
+            })
+
+        results.sort(key=lambda x: (-x["score"], -x["unfair_profit"], -x["assets"]))
+        total_unfair = sum(x["unfair_profit"] for x in results)
+        cursor.close()
+        release_db(conn)
+        return jsonify({
+            "success": True,
+            "seed": SEED,
+            "scanned_users": len(users),
+            "flagged": len(results),
+            "total_unfair_estimate": total_unfair,
+            "users": results,
+            "rules": [
+                "부당수익 ≈ 총자산 - (시드 + 관리자/출석/미션지급 + 롤링15% + 50만 여유)",
+                "대형 세션수익: 마감 1회 300만 이상",
+                "초대형 세션수익: 마감 1회 1000만 이상",
+                "저롤링 고자산: 자산 대비 롤링 과소",
+                "반복 대량마감: 300만+ 세션 2회 이상",
+            ],
+        })
+    except Exception as e:
+        print(f"fraud scan error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/admin/dashboard", methods=["GET"])
 def admin_dashboard():
     try:
@@ -3430,4 +3604,3 @@ if __name__ == "__main__":
     except Exception as _se:
         print(f"season load: {_se}")
     app.run(host="0.0.0.0", port=5000, debug=False, threaded=True)
-
