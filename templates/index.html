@@ -435,6 +435,17 @@ img,svg,canvas,video{max-width:100%;height:auto}
 .sb-grid{gap:8px!important}
 .sb-grid button{padding:11px 8px!important}
 
+
+/* layout fix */
+html,body{height:100%;overflow:hidden;margin:0}
+.screen{position:absolute;inset:0;display:none;flex-direction:column;overflow:hidden;background:#0a0610}
+.screen.active{display:flex}
+.lobby-container{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:8px 12px 20px!important;gap:10px!important}
+.lobby-card{display:flex;align-items:center;gap:12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:12px!important}
+.header-bar{flex-shrink:0}
+.control-bar{flex-shrink:0}
+.game-help-btn{top:52px!important;left:10px!important;right:auto!important;z-index:40}
+
 </style>
 </head>
 <body>
@@ -734,28 +745,34 @@ img,svg,canvas,video{max-width:100%;height:auto}
 </div>
 </div>
 <div class="screen active" id="screen-lobby">
-<div class="header-bar"><div class="header-left"><div class="header-title" id="header-nickname">ROYAL CASINO</div><div id="diff-banner" class="diff-banner normal">보통 · 96%</div>
-<div style="font-size:.75rem;color:#ffd700;margin-top:2px">보유 ₩<span id="lobby-cash-val">0</span> · 은행 ₩<span id="lobby-bank-val">0</span></div></div><button class="menu-btn" onclick="toggleSidebar(true)">메뉴<span class="menu-unread" data-menu-unread>0</span></button></div>
-<div class="lobby-hero"><h1>ROYAL CASINO</h1><p>티어 · 미션 · 솔로 시뮬레이션</p><p style="font-size:.68rem;color:#6b7280;margin-top:4px">플레이 전 메뉴에서 은행 → 보유금 출금</p></div>
-<div 
-<div id="lobby-roll-box" style="max-width:420px;margin:0 auto 10px;padding:0 14px">
-<div style="display:flex;justify-content:space-between;font-size:.72rem;color:#9ca3af"><span>마감 롤링</span><span id="lobby-roll-text">-</span></div>
-<div class="roll-prog"><i id="lobby-roll-bar"></i></div>
+<div class="header-bar">
+  <div class="header-left">
+    <div class="header-title" id="header-nickname">ROYAL CASINO</div>
+    <div id="diff-banner" class="diff-banner normal">보통 · 96%</div>
+    <div style="font-size:.75rem;color:#ffd700;margin-top:4px">보유 ₩<span id="lobby-cash-val">0</span> · 은행 ₩<span id="lobby-bank-val">0</span></div>
+  </div>
+  <button type="button" class="menu-btn" onclick="toggleSidebar(true)">메뉴<span class="menu-unread" data-menu-unread>0</span></button>
+</div>
+<div class="lobby-hero">
+  <h1>ROYAL CASINO</h1>
+  <p>티어 · 미션 · 솔로 시뮬레이션</p>
+  <p style="font-size:.68rem;color:#6b7280;margin-top:4px">플레이 전 메뉴에서 은행 → 보유금 출금</p>
+</div>
+<div id="lobby-roll-box" style="max-width:420px;margin:0 auto 12px;padding:0 14px">
+  <div style="display:flex;justify-content:space-between;font-size:.72rem;color:#9ca3af"><span>마감 롤링</span><span id="lobby-roll-text">-</span></div>
+  <div class="roll-prog"><i id="lobby-roll-bar"></i></div>
 </div>
 <div class="lobby-container">
-<div class="lobby-card" onclick="enterGame('baccarat')"><div class="lobby-icon">🃏</div><div class="lobby-info"><div class="lobby-title">바카라</div><div class="lobby-desc">플레이어 · 뱅커 · 타이 · 페어</div></div><div class="lobby-arrow">›</div></div>
-<div class="lobby-card" onclick="enterGame('dragontiger')"><div class="lobby-icon">🐉</div><div class="lobby-info"><div class="lobby-title">용호</div><div class="lobby-desc">드래곤 vs 타이거 · 랜덤 배수</div></div><div class="lobby-arrow">›</div></div>
-<div class="lobby-arrow">›</div></div>
-<div class="lobby-card" onclick="enterGame('roulette')"><div class="lobby-icon">🎡</div><div class="lobby-info"><div class="lobby-title">룰렛</div><div class="lobby-desc">레드 · 블랙 · 제로 · 홀짝</div></div><div class="lobby-arrow">›</div></div>
-<div class="lobby-card" onclick="enterGame('blackjack')"><div class="lobby-icon">🂡</div><div class="lobby-info"><div class="lobby-title">블랙잭</div><div class="lobby-desc">21 만들기 · 히트 · 스탠드</div></div><div class="lobby-arrow">›</div></div>
-<div class="lobby-card" onclick="enterGame('slot')"><div class="lobby-icon">🎰</div><div class="lobby-info"><div class="lobby-title">럭키 슬롯</div><div class="lobby-desc">3릴 잭팟 · 심볼 매치</div></div><div class="lobby-arrow">›</div></div>
-<div class="lobby-card" onclick="enterGame('dice')"><div class="lobby-icon">🎲</div><div class="lobby-info"><div class="lobby-title">주사위 홀짝</div><div class="lobby-desc">두 주사위 합 · 홀/짝 · 오버</div></div><div class="lobby-arrow">›</div></div>
-<div class="lobby-card" onclick="enterGame('crash')"><div class="lobby-icon">🚀</div><div class="lobby-info"><div class="lobby-title">크래시</div><div class="lobby-desc">배수가 터지기 전에 캐시아웃</div></div><div class="lobby-arrow">›</div></div>
-<div class="lobby-card" onclick="enterGame('plinko')"><div class="lobby-icon">🔵</div><div class="lobby-info"><div class="lobby-title">플링코</div><div class="lobby-desc">공을 떨어뜨려 배수 당첨</div></div><div class="lobby-arrow">›</div></div>
-<div class="lobby-arrow">›</div></div>
-<div class="lobby-card" onclick="enterGame('poker')"><div class="lobby-icon">♠️</div><div class="lobby-info"><div class="lobby-title">원카드 포커</div><div class="lobby-desc">딜러와 1:1 · 높은 카드 승</div></div><div class="lobby-arrow">›</div></div>
+  <div class="lobby-card" onclick="enterGame('baccarat')"><div class="lobby-icon">🃏</div><div class="lobby-info"><div class="lobby-title">바카라</div><div class="lobby-desc">플레이어 · 뱅커 · 타이 · 페어</div></div><div class="lobby-arrow">›</div></div>
+  <div class="lobby-card" onclick="enterGame('dragontiger')"><div class="lobby-icon">🐉</div><div class="lobby-info"><div class="lobby-title">용호</div><div class="lobby-desc">드래곤 vs 타이거 · 랜덤 배수</div></div><div class="lobby-arrow">›</div></div>
+  <div class="lobby-card" onclick="enterGame('roulette')"><div class="lobby-icon">🎡</div><div class="lobby-info"><div class="lobby-title">룰렛</div><div class="lobby-desc">레드 · 블랙 · 제로 · 홀짝</div></div><div class="lobby-arrow">›</div></div>
+  <div class="lobby-card" onclick="enterGame('blackjack')"><div class="lobby-icon">🂡</div><div class="lobby-info"><div class="lobby-title">블랙잭</div><div class="lobby-desc">21 만들기 · 히트 · 스탠드</div></div><div class="lobby-arrow">›</div></div>
+  <div class="lobby-card" onclick="enterGame('slot')"><div class="lobby-icon">🎰</div><div class="lobby-info"><div class="lobby-title">럭키 슬롯</div><div class="lobby-desc">3릴 잭팟 · 심볼 매치</div></div><div class="lobby-arrow">›</div></div>
+  <div class="lobby-card" onclick="enterGame('dice')"><div class="lobby-icon">🎲</div><div class="lobby-info"><div class="lobby-title">주사위 홀짝</div><div class="lobby-desc">두 주사위 합 · 홀/짝 · 오버</div></div><div class="lobby-arrow">›</div></div>
+  <div class="lobby-card" onclick="enterGame('crash')"><div class="lobby-icon">🚀</div><div class="lobby-info"><div class="lobby-title">크래시</div><div class="lobby-desc">배수가 터지기 전에 캐시아웃</div></div><div class="lobby-arrow">›</div></div>
+  <div class="lobby-card" onclick="enterGame('plinko')"><div class="lobby-icon">🔵</div><div class="lobby-info"><div class="lobby-title">플링코</div><div class="lobby-desc">공을 떨어뜨려 배수 당첨</div></div><div class="lobby-arrow">›</div></div>
+  <div class="lobby-card" onclick="enterGame('poker')"><div class="lobby-icon">♠️</div><div class="lobby-info"><div class="lobby-title">원카드 포커</div><div class="lobby-desc">딜러와 1:1 · 높은 카드 승</div></div><div class="lobby-arrow">›</div></div>
 </div>
-<div class="control-bar"><div class="account-info"><div>보유금: ₩<span id="lobby-cash-val">0</span></div></div><button class="close-btn" onclick="handleCloseGame()">마감</button></div>
 </div>
 
 <div class="screen" id="screen-baccarat">
@@ -774,8 +791,7 @@ img,svg,canvas,video{max-width:100%;height:auto}
 <div class="bet-zone zone-banker" onclick="placeBet('BANKER')"><div class="zone-title" style="color:#f87171">BANKER<br><span style="font-size:.68rem;font-weight:500;color:#fff">1:0.95</span></div><div class="chip-placed" id="chip-BANKER">🪙 <span id="val-BANKER">0</span></div></div></div></div>
 <div class="chip-bar-wrapper"><div class="chip-bar" id="chip-bar-bacc"></div><button class="action-btn reset-btn" onclick="undoLastBet()" style="background:#444">취소</button><button class="action-btn reset-btn" onclick="resetCurrentBets()">리셋</button></div>
 <div class="bottom-panels"><div class="road-board"><div class="big-road-grid" id="big-road-grid"></div></div></div>
-<div 
-class="control-bar"><div class="account-info"><div>보유금: ₩<span id="cash-val">0</span></div><div>배팅: ₩<span id="bet-val">0</span></div><div>획득: ₩<span id="paid-val">0</span></div></div><button class="close-btn" onclick="handleCloseGame()">마감</button></div></div>
+<div class="control-bar"><div class="account-info"><div>보유금: ₩<span id="cash-val">0</span></div><div>배팅: ₩<span id="bet-val">0</span></div><div>획득: ₩<span id="paid-val">0</span></div></div><button class="close-btn" onclick="handleCloseGame()">마감</button></div></div>
 
 <div class="screen" id="screen-dragontiger">
 <div class="header-bar"><div class="header-title">🐉 용호</div><div style="display:flex;gap:6px"><button class="back-btn" onclick="exitToLobby()">⬅ 로비</button><button class="menu-btn" onclick="toggleSidebar(true)">메뉴<span class="menu-unread" data-menu-unread>0</span></button></div></div>
@@ -792,8 +808,7 @@ class="control-bar"><div class="account-info"><div>보유금: ₩<span id="cash-
 <div class="bet-zone zone-tiger" onclick="placeBetDT('TIGER')"><div class="zone-title" style="color:#facc15">TIGER (호)<br><span style="font-size:.68rem;font-weight:500;color:#fff">1:1</span></div><div class="chip-placed" id="chip-TIGER">🪙 <span id="val-TIGER">0</span></div></div></div></div>
 <div class="chip-bar-wrapper"><div class="chip-bar" id="chip-bar-dt"></div><button class="action-btn reset-btn" onclick="undoLastBetDT()" style="background:#444">취소</button><button class="action-btn reset-btn" onclick="resetCurrentBetsDT()">리셋</button></div>
 <div class="bottom-panels"><div class="road-board"><div class="big-road-grid" id="dt-road-grid"></div></div></div>
-<div 
-class="control-bar"><div class="account-info"><div>보유금: ₩<span id="dt-cash-val">0</span></div><div>배팅: ₩<span id="dt-bet-val">0</span></div><div>획득: ₩<span id="dt-paid-val">0</span></div></div><button class="close-btn" onclick="handleCloseGame()">마감</button></div></div>
+<div class="control-bar"><div class="account-info"><div>보유금: ₩<span id="dt-cash-val">0</span></div><div>배팅: ₩<span id="dt-bet-val">0</span></div><div>획득: ₩<span id="dt-paid-val">0</span></div></div><button class="close-btn" onclick="handleCloseGame()">마감</button></div></div>
 
 <div class="screen" id="screen-highlow">
 <div class="header-bar"><div class="header-title">🔼 하이로우</div><div style="display:flex;gap:6px"><button class="back-btn" onclick="exitToLobby()">⬅ 로비</button><button class="menu-btn" onclick="toggleSidebar(true)">메뉴<span class="menu-unread" data-menu-unread>0</span></button></div></div>
