@@ -495,7 +495,7 @@ img,svg,canvas,video{max-width:100%;height:auto}
 <button class="login-btn" id="auth-submit-btn" onclick="handleLogin()">로그인</button></div></div>
 <div class="admin-modal-overlay" id="ranking-modal" style="display:none"><div class="admin-card" style="max-width:400px">
 <div class="login-title" style="display:flex;justify-content:space-between;align-items:center"><span>🏆 랭킹</span><button onclick="closeRankingModal()" style="background:none;border:none;color:#aaa;font-size:1.2rem;cursor:pointer">✕</button></div>
-<div class="rank-tabs"><button class="rank-tab active" id="rank-tab-tier" onclick="switchRankTab('tier')">티어 랭킹</button><button class="rank-tab" id="rank-tab-season" onclick="switchRankTab('season')">시즌 랭킹</button></div>
+<div class="rank-tabs"><button class="rank-tab active" id="rank-tab-tier" onclick="switchRankTab('tier')">티어</button><button class="rank-tab" id="rank-tab-season" onclick="switchRankTab('season')">시즌</button><button class="rank-tab" id="rank-tab-assets" onclick="switchRankTab('assets')">총자산</button></div>
 <div id="season-rank-toolbar" style="display:none;padding:6px 4px 8px;gap:6px;flex-wrap:wrap;align-items:center">
 <button type="button" id="btn-prev-season-rank" onclick="toggleSeasonArchivePanel()" style="font-size:.68rem;padding:4px 8px;border-radius:999px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.06);color:#cbd5e1;cursor:pointer">이전 랭킹</button>
 <span id="season-rank-label" style="font-size:.72rem;color:#fbbf24;font-weight:700"></span>
@@ -585,6 +585,9 @@ img,svg,canvas,video{max-width:100%;height:auto}
 <button type="button" onclick="openTierBenefits()" style="margin-top:8px;width:100%;padding:8px;border-radius:8px;border:1px solid rgba(255,215,0,.35);background:rgba(255,215,0,.1);color:#ffd700;font-weight:700;font-size:.78rem;cursor:pointer">🎖 티어 혜택 보기</button>
 <button type="button" onclick="showPatchNotesFromMenu()" style="margin-top:6px;width:100%;padding:8px;border-radius:8px;border:1px solid rgba(147,197,253,.35);background:rgba(59,130,246,.12);color:#93c5fd;font-weight:700;font-size:.78rem;cursor:pointer">📋 패치 노트</button>
 <button type="button" onclick="openMissions()" style="margin-top:6px;width:100%;padding:8px;border-radius:8px;border:1px solid rgba(96,165,250,.35);background:rgba(59,130,246,.12);color:#93c5fd;font-weight:700;font-size:.78rem;cursor:pointer">🎯 일일 미션</button>
+<button type="button" id="recovery-btn" onclick="claimRecovery()" style="margin-top:6px;width:100%;padding:8px;border-radius:8px;border:1px solid rgba(74,222,128,.4);background:rgba(74,222,128,.12);color:#4ade80;font-weight:700;font-size:.78rem;cursor:pointer">🆘 파산 재기 지원</button>
+<div id="recovery-hint" style="font-size:.68rem;color:#9ca3af;margin-top:4px;line-height:1.35;display:none"></div>
+
 <button type="button" onclick="openSafety()" style="margin-top:6px;width:100%;padding:8px;border-radius:8px;border:1px solid rgba(248,113,113,.35);background:rgba(239,68,68,.1);color:#fca5a5;font-weight:700;font-size:.78rem;cursor:pointer">🛡 안전장치</button>
 </div>
 <div class="sidebar-item"><span class="sidebar-label">출금 (잔고 → 보유금)</span><div class="withdraw-box"><input type="number" id="withdraw-input-amt" class="withdraw-input" placeholder="금액 입력"><button class="withdraw-btn" onclick="processWithdraw()">출금하기</button></div></div>
@@ -1092,13 +1095,13 @@ window.onload=async()=>{ setTimeout(function(){ try{ openPatchNotes(false); }cat
 function showLocalNotice(m){document.getElementById('notice-body-text').innerText=m;document.getElementById('notice-overlay').style.display='flex';}
 function showDisclaimerIfNeeded(){const u=localStorage.getItem('disclaimer_hide_until');if(u&&Date.now()<parseInt(u,10))return;document.getElementById('disclaimer-overlay').style.display='flex';}
 function closeDisclaimer(h){if(h)localStorage.setItem('disclaimer_hide_until',String(Date.now()+3*864e5));document.getElementById('disclaimer-overlay').style.display='none';}
-async function checkNotice(){try{const res=await fetch('/api/notice');if(!res.ok)return;const d=await res.json();if(d&&d.id&&d.id!==lastSeenNoticeId&&d.message){document.getElementById('notice-body-text').innerText=d.message;document.getElementById('notice-overlay').style.display='flex';lastSeenNoticeId=d.id;localStorage.setItem('last_seen_notice_id',d.id);}}catch(e){}}
+async function checkNotice(){try{const res=await fetch('/api/notice');if(!res.ok)return;const d=await res.json();if(d&&d.id&&d.id!==lastSeenNoticeId&&d.message){const body=document.getElementById('notice-body-text');const ov=document.getElementById('notice-overlay');const card=ov&&ov.querySelector('.notice-card, .login-card, div');if(body) body.innerText=d.message;if(ov){ov.style.display='flex';if(d.important){ov.style.background='rgba(80,0,0,.75)';if(card){card.style.border='2px solid #f87171';card.style.boxShadow='0 0 40px rgba(248,113,113,.35)';}}else{ov.style.background='';if(card){card.style.border='';card.style.boxShadow='';}}}lastSeenNoticeId=d.id;localStorage.setItem('last_seen_notice_id',d.id);}}catch(e){}}
 function closeNoticePopup(){document.getElementById('notice-overlay').style.display='none';}
 function goToScreen(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));const el=document.getElementById(id);if(el)el.classList.add('active');try{toggleSidebar(false);}catch(e){}try{syncAllCashUI();}catch(e){}}
 function enterGame(g){if(checkSuspendedGate())return;if(checkSafetyGate())return;currentGame=g;const hb=document.getElementById('floating-help-btn');if(hb)hb.style.display='block';setTimeout(()=>showHelpFor(g),300);if(g==='baccarat'){goToScreen('screen-baccarat');baccaratLoopRunning=false;setTimeout(function(){if(currentGame!=='baccarat')return;baccaratLoopRunning=true;initBigRoadGrid('big-road-grid');roadMatrix={};lastWinner=null;currentCol=0;currentRow=0;generateRandomHistory('baccarat');startLiveLoop();},30);}else if(g==='dragontiger'){goToScreen('screen-dragontiger');dtLoopRunning=false;setTimeout(function(){if(currentGame!=='dragontiger')return;dtLoopRunning=true;initBigRoadGrid('dt-road-grid');roadMatrixDT={};lastWinnerDT=null;currentColDT=0;currentRowDT=0;generateRandomHistory('dragontiger');startLiveLoopDT();},30);}else if(g==='highlow'){goToScreen('screen-highlow');resetHighLowUI();}else if(g==='roulette')goToScreen('screen-roulette');else if(g==='blackjack'){goToScreen('screen-blackjack');resetBJ();}else if(g==='slot')goToScreen('screen-slot');else if(g==='dice')goToScreen('screen-dice');else if(g==='crash'){goToScreen('screen-crash');resetCrash();}else if(g==='plinko'){goToScreen('screen-plinko');initPlinkoSlots();}else if(g==='stock'){goToScreen('screen-stock');stockEnter();}else if(g==='poker'){goToScreen('screen-poker');resetPoker();}refreshChipBars();syncAllCashUI();if(typeof cash==='number'&&cash<=0){setTimeout(function(){alert('보유금이 없습니다. 메뉴에서 은행 잔고를 출금한 뒤 플레이하세요.');},200);}}
 function exitToLobby(){currentGame=null;const hb=document.getElementById('floating-help-btn');if(hb)hb.style.display='none';goToScreen('screen-lobby');baccaratLoopRunning=false;dtLoopRunning=false;isBettingOpen=false;isBettingOpenDT=false;}
 function syncAllCashUI(){['bank-cash-val','cash-val','lobby-cash-val','dt-cash-val','hl-cash-val','rl-cash-val','bj-cash-val','slot-cash-val','dice-cash-val','crash-cash-val','plinko-cash-val','stock-cash-val','poker-cash-val'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerText=Math.floor(id==='bank-cash-val'?serverCash:cash).toLocaleString();});}
-function checkBrokeReset(){if(cash<=0){cash=0;currentRolling=0;initialWithdraw=0;updateCloseButtonState();}}
+function checkBrokeReset(){if(cash<=0){cash=0;currentRolling=0;initialWithdraw=0;updateCloseButtonState();try{maybePromptRecovery();}catch(e){}}}
 
 async function autoLogin(username){
   try{
@@ -1117,7 +1120,7 @@ async function autoLogin(username){
   authToken='';
   document.getElementById('login-overlay').style.display='flex';
 }
-function applyUserData(d){currentUser=d.username;window.isAdmin=!!d.is_admin||d.username==='abcd051410';displayName=d.display_name||d.name||d.username;serverCash=d.cash||0;cash=d.game_cash||0;lastAttendanceDate=d.last_attendance||'';isSuspended=!!d.suspended;if(isSuspended)setTimeout(showSuspendModal,300);totalRolling=d.total_rolling||0;initialWithdraw=d.initial_withdraw||0;currentRolling=d.current_rolling||0;totalProfit=d.total_profit||0;const hn=document.getElementById('header-nickname');if(hn)hn.innerHTML=displayName+' 님 <span class="tier-badge header-tier" id="header-tier-badge"></span>';updateTierUI(); try{ setTimeout(function(){ openPatchNotes(false); }, 500); }catch(e){}document.getElementById('sidebar-user-title').innerText=displayName+' ('+currentUser+')';const ab=document.getElementById('admin-menu-btn');if(ab)ab.style.display=(currentUser==='abcd051410')?'block':'none';lastKnownBank=serverCash;lastKnownGame=cash;lastSeenTxId=0;txPollReady=false;updateAttendanceBtn();pollUnreadBadge();sendHeartbeat();pollTransferDeposits();updateUIValues();updateCloseButtonState();syncAllCashUI();}
+function applyUserData(d){currentUser=d.username;window.isAdmin=!!d.is_admin||d.username==='abcd051410';displayName=d.display_name||d.name||d.username;serverCash=d.cash||0;cash=d.game_cash||0;lastAttendanceDate=d.last_attendance||'';isSuspended=!!d.suspended;if(isSuspended)setTimeout(showSuspendModal,300);totalRolling=d.total_rolling||0;initialWithdraw=d.initial_withdraw||0;currentRolling=d.current_rolling||0;totalProfit=d.total_profit||0;const hn=document.getElementById('header-nickname');if(hn)hn.innerHTML=displayName+' 님 <span class="tier-badge header-tier" id="header-tier-badge"></span>';updateTierUI(); try{ setTimeout(function(){ openPatchNotes(false); }, 500); }catch(e){} try{ setTimeout(function(){ refreshRecoveryStatus(); maybePromptRecovery(); }, 800); }catch(e){}document.getElementById('sidebar-user-title').innerText=displayName+' ('+currentUser+')';const ab=document.getElementById('admin-menu-btn');if(ab)ab.style.display=(currentUser==='abcd051410')?'block':'none';lastKnownBank=serverCash;lastKnownGame=cash;lastSeenTxId=0;txPollReady=false;updateAttendanceBtn();pollUnreadBadge();sendHeartbeat();pollTransferDeposits();updateUIValues();updateCloseButtonState();syncAllCashUI();}
 function switchAuthTab(m){authMode=m;document.getElementById('tab-login-btn').classList.toggle('active',m==='login');document.getElementById('tab-reg-btn').classList.toggle('active',m==='register');document.getElementById('auth-submit-btn').innerText=m==='login'?'로그인':'회원가입 완료';document.getElementById('displayname-input').style.display=m==='register'?'block':'none';}
 async function handleLogin(){const username=document.getElementById('username-input').value.trim(),password=document.getElementById('password-input').value.trim(),name=document.getElementById('displayname-input').value.trim();if(!username||!password){alert('아이디와 비밀번호를 입력해주세요.');return;}if(authMode==='register'){if(!name){alert('이름을 입력해주세요.');return;}if(!confirm('이름을 정확히 입력했는지 확인하세요.\n\n※ 이름을 잘못 입력하면 계정이 삭제될 수 있습니다.\n\n이름: ['+name+']\n계속하시겠습니까?'))return;try{
   const res=await fetch('/api/register',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({username,password,display_name:name,name})});
@@ -1137,7 +1140,19 @@ async function handleLogin(){const username=document.getElementById('username-in
 }}else{try{const res=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password})});const data=await res.json();if(res.ok){if(data.token){authToken=data.token;localStorage.setItem('auth_token',data.token);}localStorage.setItem('bacc_server_user',data.username);applyUserData(data);document.getElementById('login-overlay').style.display='none';goToScreen('screen-lobby');checkNotice();}else alert((data&&data.error)||('로그인 실패 ('+res.status+')'));}catch(e){alert('서버 연결 실패');}}}
 function handleLogout(){if(confirm('로그아웃 하시겠습니까?')){localStorage.removeItem('bacc_server_user');localStorage.removeItem('auth_token');authToken='';;location.reload();}}
 async function processWithdraw(){if(checkSuspendedGate())return;const amt=parseInt(document.getElementById('withdraw-input-amt').value,10);if(isNaN(amt)||amt<=0){alert('올바른 금액을 입력해주세요.');return;}if(amt>serverCash){alert('잔고가 부족합니다.');return;}try{const res=await fetch('/api/withdraw',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:currentUser,amount:amt})});let data={};try{data=await res.json();}catch(e){alert('서버 응답 오류');return;}if(!res.ok){alert(data.error||'출금 실패');return;}serverCash=Math.floor(data.cash||0);cash=Math.floor(data.game_cash||0);if(data.initial_withdraw!=null)initialWithdraw=Math.floor(data.initial_withdraw);document.getElementById('withdraw-input-amt').value='';updateUIValues();updateCloseButtonState();syncAllCashUI();alert('₩'+amt.toLocaleString()+' 출금 완료');toggleSidebar(false);}catch(e){alert('서버 통신 오류');}}
-async function handleCloseGame(){if(cash<=0){alert('마감할 보유금이 없습니다.');return;}const rollNeed=getTierRollNeed();if(currentRolling<rollNeed){alert('롤링 미달 (₩'+currentRolling.toLocaleString()+' / ₩'+rollNeed.toLocaleString()+' · 티어 '+(Math.round(getTierInfo(totalRolling).rollRatio*100))+'%)');return;}const sessionProfit=Math.floor(cash-initialWithdraw);if(!confirm('마감 금액 ₩'+Math.floor(cash).toLocaleString()+' / 순이익 ₩'+sessionProfit.toLocaleString()+'\n은행 잔고로 마감할까요?'))return;try{const res=await fetch('/api/close_session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:currentUser,current_rolling:currentRolling})});let data={};try{data=await res.json();}catch(e){alert('서버 응답 오류');return;}if(!res.ok){alert(data.error||'마감 실패');return;}serverCash=Math.floor(data.cash||0);cash=0;initialWithdraw=0;currentRolling=0;if(data.total_profit!=null)totalProfit=Math.floor(data.total_profit);updateUIValues();updateCloseButtonState();syncAllCashUI();alert('마감 완료 (세션 수익: ₩'+Math.floor(data.session_profit!=null?data.session_profit:sessionProfit).toLocaleString()+')');}catch(e){alert('서버 통신 오류');}}
+async function handleCloseGame(){if(cash<=0){alert('마감할 보유금이 없습니다.');return;}const rollNeed=getTierRollNeed();if(currentRolling<rollNeed){alert('롤링 미달 (₩'+currentRolling.toLocaleString()+' / ₩'+rollNeed.toLocaleString()+' · 티어 '+(Math.round(getTierInfo(totalRolling).rollRatio*100))+'%)');return;}const sessionProfit=Math.floor(cash-initialWithdraw);if(!confirm('마감 금액 ₩'+Math.floor(cash).toLocaleString()+' / 순이익 ₩'+sessionProfit.toLocaleString()+'\n은행 잔고로 마감할까요?'))return;try{const res=await (typeof authFetch==='function'?authFetch:fetch)('/api/close_session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:currentUser,token:authToken,current_rolling:currentRolling})});let data={};try{data=await res.json();}catch(e){alert('서버 응답 오류');return;}if(!res.ok){alert(data.error||'마감 실패');return;}serverCash=Math.floor(data.cash||0);cash=0;initialWithdraw=0;currentRolling=0;if(data.total_profit!=null)totalProfit=Math.floor(data.total_profit);updateUIValues();updateCloseButtonState();syncAllCashUI();{
+  let msg='마감 완료\n세션 수익: ₩'+Math.floor(data.session_profit!=null?data.session_profit:sessionProfit).toLocaleString();
+  if(data.season_points_gained!=null){
+    msg+='\n시즌 점수 +'+Math.floor(data.season_points_gained).toLocaleString()+' pts';
+    if(data.season_detail){
+      const d=data.season_detail;
+      msg+='\n(수익률 기준 '+Math.floor(d.efficiency||d.capped||0)+' pts)';
+      if(d.roi!=null) msg+='\n수익률 '+d.roi+'%';
+    }
+    if(data.season_points!=null) msg+='\n누적 시즌 '+Math.floor(data.season_points).toLocaleString()+' pts';
+  }
+  alert(msg);
+}}catch(e){alert('서버 통신 오류');}}
 function updateCloseButtonState(){const need=getTierRollNeed();document.querySelectorAll('.close-btn').forEach(b=>{b.disabled=initialWithdraw>0&&currentRolling<need;});}
 function updateUIValues(){try{updateTierUI();}catch(e){}const bc=document.getElementById('bank-cash-val');if(bc)bc.innerText=Math.floor(serverCash||0).toLocaleString();const rp=document.getElementById('rolling-progress-val');if(rp)rp.innerText=Math.floor(currentRolling||0).toLocaleString();const _rt=document.getElementById('rolling-target-val');if(_rt)_rt.innerText=Math.floor(getTierRollNeed()).toLocaleString();try{syncAllCashUI();}catch(e){}}
 let _lastUpdatePayload='';
@@ -1326,12 +1341,58 @@ async function adminEndSeason(){
   }catch(e){alert('서버 오류');}
 }
 
-function renderRanking(users,tab){const c=document.getElementById('ranking-user-list-container');if(!c)return;c.innerHTML='';if(!users||!Array.isArray(users)){c.innerHTML='<div style="padding:12px;color:#aaa">랭킹 데이터 없음</div>';return;}const sorted=[...users].sort((a,b)=>{
-  const ra=(a.tier&&a.tier.rank)||getTierInfo(a.total_rolling||0).rank||0;
-  const rb=(b.tier&&b.tier.rank)||getTierInfo(b.total_rolling||0).rank||0;
-  if(rb!==ra) return rb-ra;
-  return (b.total_rolling||0)-(a.total_rolling||0);
-});sorted.forEach((u,i)=>{const item=document.createElement('div');item.className='admin-user-item';const isMe=u.username===currentUser?' (나)':'';const name=u.display_name||u.name||u.username;const tierInfo=u.tier||getTierInfo(u.total_rolling||0);const tr=(tierInfo.badge||'')+' '+(tierInfo.name||'');const roll=Math.floor(u.total_rolling||0);const assets=Math.floor((u.cash||0)+(u.game_cash||0));const on=!!u.online;const st='<span class="status-dot '+(on?'on':'off')+'"></span><span class="status-label '+(on?'on':'off')+'">'+formatLastSeen(u.last_seen)+'</span>';item.innerHTML='<div class="admin-user-top"><div><div style="font-weight:800;color:#ffd700;text-decoration:underline;text-underline-offset:3px">'+(i+1)+'위. '+name+isMe+'</div><div class="admin-user-meta">'+st+' · <span class="tier-badge">'+tr+'</span></div></div><div style="text-align:right"><div style="font-weight:800;color:#fbbf24;font-size:.82rem">'+tr+'</div><div style="font-size:.72rem;color:#aaa">총자산 ₩'+assets.toLocaleString()+'</div><div style="font-size:.68rem;color:#777">롤링 ₩'+roll.toLocaleString()+'</div></div></div>';item.style.cursor='pointer';item.title='클릭하여 정보 보기';item.onclick=function(){openUserInfo(u);};c.appendChild(item);});}
+function renderRanking(users,tab){
+  const c=document.getElementById('ranking-user-list-container');
+  if(!c)return;
+  c.innerHTML='';
+  if(!users||!Array.isArray(users)){c.innerHTML='<div style="padding:12px;color:#aaa">랭킹 데이터 없음</div>';return;}
+  tab=tab||currentRankTab||'tier';
+  const sorted=[...users].sort((a,b)=>{
+    if(tab==='season'){
+      const sa=Math.floor(a.season_points||0), sb=Math.floor(b.season_points||0);
+      if(sb!==sa) return sb-sa;
+      return (b.total_rolling||0)-(a.total_rolling||0);
+    }
+    if(tab==='assets'){
+      const aa=Math.floor((a.total_assets!=null)?a.total_assets:((a.cash||0)+(a.game_cash||0)));
+      const bb=Math.floor((b.total_assets!=null)?b.total_assets:((b.cash||0)+(b.game_cash||0)));
+      if(bb!==aa) return bb-aa;
+      return (b.total_rolling||0)-(a.total_rolling||0);
+    }
+    // tier
+    const ra=(a.tier&&a.tier.rank)||getTierInfo(a.total_rolling||0).rank||0;
+    const rb=(b.tier&&b.tier.rank)||getTierInfo(b.total_rolling||0).rank||0;
+    if(rb!==ra) return rb-ra;
+    return (b.total_rolling||0)-(a.total_rolling||0);
+  });
+  sorted.forEach((u,i)=>{
+    const item=document.createElement('div');
+    item.className='admin-user-item';
+    const isMe=u.username===currentUser?' (나)':'';
+    const name=u.display_name||u.name||u.username;
+    const tierInfo=u.tier||getTierInfo(u.total_rolling||0);
+    const tr=(tierInfo.badge||'')+' '+(tierInfo.name||'');
+    const roll=Math.floor(u.total_rolling||0);
+    const assets=Math.floor((u.total_assets!=null)?u.total_assets:((u.cash||0)+(u.game_cash||0)));
+    const pts=Math.floor(u.season_points||0);
+    let sub='';
+    if(tab==='season'){
+      sub='<div style="font-weight:800;color:#4ade80">'+pts.toLocaleString()+' pts</div>'+
+          '<div style="font-size:.68rem;color:#9ca3af">'+tr+' · 롤링 ₩'+roll.toLocaleString()+'</div>';
+    }else if(tab==='assets'){
+      sub='<div style="font-weight:800;color:#ffd700">₩'+assets.toLocaleString()+'</div>'+
+          '<div style="font-size:.68rem;color:#9ca3af">'+tr+' · 시즌 '+pts.toLocaleString()+' pts</div>';
+    }else{
+      sub='<div style="font-weight:800;color:#ffd700">'+tr+'</div>'+
+          '<div style="font-size:.68rem;color:#9ca3af">롤링 ₩'+roll.toLocaleString()+' · 자산 ₩'+assets.toLocaleString()+'</div>';
+    }
+    const medal=i===0?'🥇':(i===1?'🥈':(i===2?'🥉':(i+1)+'.'));
+    item.innerHTML='<div style="display:flex;align-items:center;gap:10px;padding:10px 4px;border-bottom:1px solid rgba(255,255,255,.06)">'+
+      '<div style="width:28px;text-align:center;font-weight:800;color:#ffd700">'+medal+'</div>'+
+      '<div style="flex:1;min-width:0"><div style="font-weight:700;color:#fff">'+name+isMe+'</div>'+sub+'</div></div>';
+    c.appendChild(item);
+  });
+}
 function openAdminPanel(){if(currentUser!=='abcd051410'){alert('권한이 없습니다.');return;}toggleSidebar(false);adminPwCache='abcd051410';document.getElementById('admin-login-card').style.display='none';document.getElementById('admin-panel-card').style.display='flex';document.getElementById('admin-modal').style.display='flex';loadAdminUsers();}
 async function loadAdminUsers(){try{const res=await authFetch('/api/admin/users?pw=abcd051410');if(!res.ok){const err=await res.json().catch(()=>({}));alert('유저 목록 실패 ('+res.status+') '+(err.error||''));return;}const users=await res.json();if(!Array.isArray(users)){alert('유저 목록 형식 오류');return;}renderAdminUsers(users,'');}catch(e){console.error(e);alert('유저 목록 서버 오류: '+(e.message||e));}}
 async function verifyAdminPassword(){openAdminPanel();}
@@ -3601,31 +3662,26 @@ async function sendAdminNotice(){
 
 /* ===== 패치 노트 팝업 ===== */
 const PATCH_NOTES = {
-  id: '2026-08-09-tier-balance-v2',
-  title: '티어·밸런스 패치',
+  id: '2026-08-09-rank3-fair10-v5',
+  title: '랭킹 3종 · 시즌 공정 10',
   date: '2026.08.09',
   body:
-`이번 업데이트 주요 내용입니다.
+`랭킹·시즌 업데이트
 
-【티어 밸런스 재조정】
-• 초반(아이언~브론즈) 롤링 요구 상향 → 바로 스킵 방지
-• 중반(실버~플래티넘) 완만한 성장
-• 후반 챌린저 8억으로 현실화 (기존 20억)
-• 출석 2.5만~15만으로 티어 격차 확대
-• 최대 배팅 배율 상한 5.0 (과도한 한도 완화)
-• 송금 수수료 6%~0.5% 재정렬
+【시즌 점수 공정성 10/10】
+• 수익률(%)만 반영 (절대 금액 제외)
+• 동일 수익률 = 동일 점수
+• 세션 상한 30,000 pts
+  예) +50% → 5,000 / +100% → 10,000
 
-【난이도】
-• 쉬움 90% · 보통 96% · 어려움 99%
-• 이익에만 난이도 적용 · 환불 원금 보장
+【랭킹 3종】
+• 티어 — 롤링·티어 순
+• 시즌 — 시즌 점수 순
+• 총자산 — 은행+게임머니 순
 
-【용호】
-• 지급 = 배팅 + 배팅×배수
-• 수수료 6%
-
-【경제】
-• 신규 시드 100만원
-• 출석·미션 보상 조정`
+【시즌 종료】
+• 전체 유저에게 [중요] 공지 팝업
+• 돈·티어 유지 / 시즌 점수만 리셋`
 };
 
 function shouldShowPatchNotes(){
@@ -3655,6 +3711,73 @@ function closePatchNotes(remember){
 }
 function showPatchNotesFromMenu(){
   openPatchNotes(true);
+}
+
+
+/** 파산 재기 지원 */
+async function refreshRecoveryStatus(){
+  if(!currentUser||!authToken)return null;
+  try{
+    const res=await authFetch('/api/recovery/status',{method:'GET'});
+    if(!res.ok)return null;
+    const d=await res.json();
+    const hint=document.getElementById('recovery-hint');
+    const btn=document.getElementById('recovery-btn');
+    if(hint){
+      if(d.can_claim){
+        hint.style.display='block';
+        hint.innerText='파산 상태 · 오늘 ₩'+(d.amount||70000).toLocaleString()+' 지원 가능';
+        hint.style.color='#4ade80';
+      }else if(d.claimed_today){
+        hint.style.display='block';
+        hint.innerText='오늘 재기 지원 완료 · 내일 다시 가능';
+        hint.style.color='#9ca3af';
+      }else{
+        hint.style.display='none';
+      }
+    }
+    if(btn){
+      btn.style.opacity = d.can_claim ? '1' : '0.55';
+    }
+    return d;
+  }catch(e){ return null; }
+}
+async function claimRecovery(){
+  if(!currentUser){alert('로그인이 필요합니다');return;}
+  try{
+    const st=await refreshRecoveryStatus();
+    if(st && !st.can_claim){
+      if(st.claimed_today) alert('오늘은 이미 재기 지원을 받았습니다.\n내일 다시 받을 수 있습니다.');
+      else alert('파산 상태가 아닙니다.\n게임머니 0원 · 은행 잔고 1,000원 이하일 때만 가능합니다.');
+      return;
+    }
+    if(!confirm('파산 재기 지원금 ₩70,000 을 받을까요?\n(하루 1회 · 게임머니로 지급)'))return;
+    const res=await authFetch('/api/recovery/claim',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+    const data=await res.json().catch(()=>({}));
+    if(!res.ok){ alert(data.error||'재기 지원 실패'); return; }
+    cash=Math.floor(data.game_cash||70000);
+    syncAllCashUI();
+    await updateServerData(0);
+    showPushToast('🆘 재기 지원', '+₩'+(data.amount||70000).toLocaleString()+' 지급', 'win');
+    alert(data.message||'재기 지원 완료!');
+    refreshRecoveryStatus();
+  }catch(e){
+    console.error(e);
+    alert('서버 통신 오류');
+  }
+}
+async function maybePromptRecovery(){
+  try{
+    if(cash>0) return;
+    const st=await refreshRecoveryStatus();
+    if(st && st.can_claim){
+      // 부드러운 안내 (강제 confirm 연타 방지)
+      const k='recovery_prompt_'+((new Date()).toISOString().slice(0,10));
+      if(sessionStorage.getItem(k)) return;
+      sessionStorage.setItem(k,'1');
+      showPushToast('파산 안내','메뉴에서 재기 지원(하루 1회 ₩70,000)을 받을 수 있습니다.','info');
+    }
+  }catch(e){}
 }
 
 </script>
