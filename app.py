@@ -421,8 +421,17 @@ def get_tier(rolling):
     return get_tier(0)
 
 
+_SCHEMA_READY = False
+_SCHEMA_LOCK = __import__("threading").Lock()
+
 def ensure_user_columns(cursor, conn=None):
-    """누락 컬럼 보정 — 로그인/회원가입 실패 방지"""
+    """누락 컬럼 보정 — 1회만 실행 (매 요청 ALTER 방지)"""
+    global _SCHEMA_READY
+    if _SCHEMA_READY:
+        return
+    with _SCHEMA_LOCK:
+        if _SCHEMA_READY:
+            return
     # 비밀번호 해시(pbkdf2)가 100자 초과 → 컬럼 확장
     try:
         cursor.execute("ALTER TABLE users ALTER COLUMN password TYPE VARCHAR(255)")
@@ -468,21 +477,68 @@ def ensure_user_columns(cursor, conn=None):
             except Exception:
                 pass
 
+    _SCHEMA_READY = True
+
+
+# 커넥션 풀 — 매 요청 connect() 비용(Render 지연 주범) 제거
+_db_pool = None
+_db_pool_lock = __import__("threading").Lock()
+
+def _init_db_pool():
+    global _db_pool
+    if _db_pool is not None:
+        return
+    with _db_pool_lock:
+        if _db_pool is not None:
+            return
+        if not DATABASE_URL:
+            raise ValueError("DATABASE_URL 환경 변수가 설정되지 않았습니다!")
+        from psycopg2 import pool as _pgpool
+        _db_pool = _pgpool.ThreadedConnectionPool(
+            minconn=1,
+            maxconn=12,
+            dsn=DATABASE_URL,
+            connect_timeout=5,
+        )
 
 def get_db_connection():
-    """매 요청마다 새 연결 (풀 고갈 없음). 반드시 release_db로 닫을 것."""
-    if not DATABASE_URL:
-        raise ValueError("DATABASE_URL 환경 변수가 설정되지 않았습니다!")
-    conn = psycopg2.connect(DATABASE_URL, connect_timeout=10)
+    """풀에서 연결 대여. 반드시 release_db로 반환."""
+    _init_db_pool()
+    conn = _db_pool.getconn()
+    try:
+        # 죽은 연결 방지
+        if conn.closed:
+            _db_pool.putconn(conn, close=True)
+            conn = _db_pool.getconn()
+    except Exception:
+        pass
     return conn
 
 
 def release_db(conn):
-    """연결 종료. 예외가 나도 무시."""
+    """풀에 연결 반환."""
     if conn is None:
         return
+    global _db_pool
     try:
-        conn.close()
+        if _db_pool is None:
+            try:
+                conn.close()
+            except Exception:
+                pass
+            return
+        try:
+            if not conn.closed:
+                conn.rollback()
+        except Exception:
+            pass
+        try:
+            _db_pool.putconn(conn)
+        except Exception:
+            try:
+                conn.close()
+            except Exception:
+                pass
     except Exception:
         pass
 
@@ -3466,22 +3522,21 @@ def admin_fraud_scan():
             last_seen = float(r[6] or 0)
             assets = cash + game
             grant = int(grants.get(uname, 0))
-            # 지급합 오염 방지: 유저당 최대 5,000만, 자산 초과 시 무시
+            # 지급합 오염 방지
             if grant > 50_000_000:
                 grant = 50_000_000
             if grant > assets + SEED:
                 grant = 0
-            # --- 부당수익 ---
-            # 시드 대비 순증
+            # --- 부당수익 (롤링 반영 조정) ---
+            # 정상 플레이 허용: 롤링의 25% (최대 5,000만) — 운 좋은 수익 여유
+            roll_allow = int(min(50_000_000, max(0, int(roll * 0.25))))
+            fair_cap = int(SEED + grant + roll_allow)
             net_vs_seed = int(assets - SEED)
-            # 메인: 총자산 - 시드 - 정상지급 (최소 0)
-            unfair = int(max(0, assets - SEED - grant))
-            # 롤링 여유(최대 2,000만) 반영한 보수 수치
-            roll_allow = int(min(20_000_000, max(0, int(roll * 0.10))))
-            fair_cap = int(SEED + grant + roll_allow + 300_000)
-            unfair_adj = int(max(0, assets - fair_cap))
-            # 세션 대량 수익이 있으면 부당수익 하한으로 반영
-            # (자산은 이미 빠져나갔어도 마감 기록으로 탐지)
+            # 메인 부당수익 = 총자산 - 시드 - 지급 - 롤링허용
+            unfair = int(max(0, assets - fair_cap))
+            unfair_adj = unfair
+            # 시드·지급만 뺀 값 (참고)
+            unfair_raw = int(max(0, assets - SEED - grant))
 
             # 마감 세션 수익 합 (양수만)
             cps = close_profits.get(uname, [])
@@ -3534,6 +3589,8 @@ def admin_fraud_scan():
                 "net_vs_seed": net_vs_seed,
                 "unfair_profit": unfair,
                 "unfair_profit_adj": unfair_adj,
+                "unfair_raw": int(max(0, assets - SEED - grant)),
+                "roll_allow": roll_allow,
                 "close_profit_sum": close_pos,
                 "close_profit_max": close_max,
                 "close_big_count": close_big,
@@ -3557,7 +3614,7 @@ def admin_fraud_scan():
             "total_unfair_estimate": total_unfair,
             "users": results,
             "rules": [
-                "부당수익 = 총자산 - 시드(100만) - 관리자/출석/미션 지급합",
+                "부당수익 = 총자산 - 시드(100만) - 정상지급 - 롤링×25%(최대 5천만)",
                 "대형 세션수익: 마감 1회 300만 이상",
                 "초대형 세션수익: 마감 1회 1000만 이상",
                 "저롤링 고자산: 자산 대비 롤링 과소",
@@ -3566,6 +3623,186 @@ def admin_fraud_scan():
         })
     except Exception as e:
         print(f"fraud scan error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+
+
+@app.route("/api/admin/fraud/recover", methods=["POST"])
+def admin_fraud_recover():
+    """부당수익 회수 + 롤링/시즌점수 삭감"""
+    try:
+        auth_admin, err = require_admin()
+        if err:
+            return err
+        data = request.get_json(silent=True) or {}
+        username = (data.get("username") or "").strip()
+        if not username:
+            return jsonify({"error": "username required"}), 400
+        if username == ADMIN_USER:
+            return jsonify({"error": "관리자 계정은 회수 불가"}), 400
+
+        SEED = 1_000_000
+        mode = (data.get("mode") or "unfair").strip()  # unfair | seed
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        try:
+            ensure_user_columns(cursor, conn)
+        except Exception:
+            pass
+
+        cursor.execute(
+            """
+            SELECT COALESCE(cash,0), COALESCE(game_cash,0), COALESCE(total_rolling,0),
+                   COALESCE(current_rolling,0), COALESCE(total_profit,0)
+            FROM users WHERE username=%s FOR UPDATE
+            """,
+            (username,),
+        )
+        row = cursor.fetchone()
+        if not row:
+            cursor.close(); release_db(conn)
+            return jsonify({"error": "유저 없음"}), 404
+
+        cash, game, total_roll, cur_roll, tprofit = [int(x or 0) for x in row]
+        assets = cash + game
+
+        # 지급합 재계산 (간단: 거래 기반)
+        grant = 0
+        try:
+            cursor.execute(
+                """
+                SELECT kind, amount FROM transactions
+                WHERE username=%s AND kind IN ('전체지급','관리자지급','관리자입금','재기지원','출석보상','미션보상')
+                ORDER BY id DESC LIMIT 500
+                """,
+                (username,),
+            )
+            for kind, amount in (cursor.fetchall() or []):
+                try:
+                    amount = int(amount or 0)
+                except Exception:
+                    amount = 0
+                kind = (kind or "").strip()
+                if kind in ("전체지급", "관리자지급", "관리자입금") and 0 < amount <= 5_000_000:
+                    grant += amount
+                elif kind in ("재기지원", "출석보상", "미션보상") and 0 < amount <= 200_000:
+                    grant += amount
+            grant = min(grant, 50_000_000)
+        except Exception as e:
+            print("grant calc", e)
+            grant = 0
+
+        roll_allow = int(min(50_000_000, max(0, int(total_roll * 0.25))))
+        fair_cap = int(SEED + grant + roll_allow)
+        unfair = int(max(0, assets - fair_cap))
+
+        if mode == "seed":
+            new_cash, new_game = SEED, 0
+            recovered = max(0, assets - SEED)
+            # 롤링·시즌 전면 리셋
+            new_total_roll = 0
+            new_cur_roll = 0
+            new_tprofit = 0
+            season_cut = None
+        else:
+            # 부당수익만 회수: 자산을 fair_cap으로
+            recovered = unfair
+            target = fair_cap
+            # 게임머니 먼저 회수, 부족하면 은행
+            if game >= recovered:
+                new_game = game - recovered
+                new_cash = cash
+            else:
+                new_game = 0
+                new_cash = max(0, cash - (recovered - game))
+            # 최종 합이 target 되도록 보정
+            if new_cash + new_game > target:
+                overflow = new_cash + new_game - target
+                if new_game >= overflow:
+                    new_game -= overflow
+                else:
+                    overflow -= new_game
+                    new_game = 0
+                    new_cash = max(0, new_cash - overflow)
+            # 랭킹 삭감: 부당비율만큼 롤링·총수익 삭감
+            if assets > 0 and recovered > 0:
+                ratio = min(1.0, recovered / float(assets))
+            else:
+                ratio = 0.0
+            new_total_roll = int(max(0, total_roll * (1.0 - ratio)))
+            new_cur_roll = int(max(0, cur_roll * (1.0 - ratio)))
+            new_tprofit = int(max(0, tprofit * (1.0 - ratio)))
+            season_cut = ratio
+
+        # season_points 컬럼 있으면 삭감
+        season_before = 0
+        season_after = 0
+        try:
+            cursor.execute(
+                "SELECT COALESCE(season_points,0) FROM users WHERE username=%s",
+                (username,),
+            )
+            sp = cursor.fetchone()
+            season_before = int(sp[0] or 0) if sp else 0
+            if mode == "seed":
+                season_after = 0
+            else:
+                season_after = int(max(0, season_before * (1.0 - (season_cut or 0))))
+            cursor.execute(
+                "UPDATE users SET season_points=%s WHERE username=%s",
+                (season_after, username),
+            )
+        except Exception:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            # 재시작 트랜잭션 느낌으로 다시 FOR UPDATE 없이 update only money
+            pass
+
+        cursor.execute(
+            """
+            UPDATE users SET
+                cash=%s,
+                game_cash=%s,
+                total_rolling=%s,
+                current_rolling=%s,
+                total_profit=%s,
+                initial_withdraw=0
+            WHERE username=%s
+            """,
+            (int(new_cash), int(new_game), int(new_total_roll), int(new_cur_roll), int(new_tprofit), username),
+        )
+        try:
+            log_transaction(
+                cursor, username, "부당회수",
+                -int(recovered),
+                balance_after=int(new_cash),
+                memo=f"mode={mode} unfair={unfair} fair_cap={fair_cap} roll {total_roll}->{new_total_roll} season {season_before}->{season_after}",
+            )
+        except Exception as e:
+            print("log recover", e)
+
+        conn.commit()
+        cursor.close(); release_db(conn)
+        return jsonify({
+            "success": True,
+            "username": username,
+            "mode": mode,
+            "recovered": int(recovered),
+            "unfair_before": int(unfair),
+            "fair_cap": int(fair_cap),
+            "cash": int(new_cash),
+            "game_cash": int(new_game),
+            "total_rolling": int(new_total_roll),
+            "total_profit": int(new_tprofit),
+            "season_points_before": int(season_before),
+            "season_points_after": int(season_after),
+        })
+    except Exception as e:
+        print(f"fraud recover error: {e}")
         return jsonify({"error": str(e)}), 500
 
 
