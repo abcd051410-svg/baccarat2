@@ -404,6 +404,25 @@ img,svg,canvas,video{max-width:100%;height:auto}
 .auto-cash-row{display:flex;gap:6px;align-items:center;font-size:.75rem;color:#ccc;margin:6px 0;flex-wrap:wrap}
 .auto-cash-row input{width:72px;padding:6px 8px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:#0c0810;color:#ffd700}
 
+
+/* sidebar compact */
+.sidebar{width:min(300px,92vw)!important}
+.sidebar-content{gap:6px}
+.sb-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:8px 0}
+.sb-grid button,.sb-btn{
+  margin:0!important;width:100%!important;padding:9px 8px!important;border-radius:8px!important;
+  border:1px solid rgba(255,255,255,.1)!important;background:rgba(255,255,255,.05)!important;
+  color:#e5e7eb!important;font-weight:600!important;font-size:.72rem!important;cursor:pointer;
+  line-height:1.2;text-align:center
+}
+.sb-grid button:active,.sb-btn:active{background:rgba(255,215,0,.12)!important}
+.sb-section{font-size:.65rem;color:#6b7280;margin:8px 0 4px;letter-spacing:.02em}
+.sidebar-item{padding:6px 0!important}
+#tier-perks{display:none!important}
+.att-cal{margin-top:4px!important;gap:3px!important}
+.att-cal div{padding:4px 0!important;font-size:.6rem!important}
+.sidebar-btn{margin-top:6px!important}
+
 </style>
 </head>
 <body>
@@ -646,44 +665,63 @@ img,svg,canvas,video{max-width:100%;height:auto}
 
 </div></div>
 <div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar(false)"></div>
-<div class="sidebar" id="sidebar"><div class="sidebar-header"><div class="sidebar-title" id="sidebar-user-title">플레이어 정보</div><button class="sidebar-close" onclick="toggleSidebar(false)">✕</button></div>
+<div class="sidebar" id="sidebar">
+<div class="sidebar-header">
+  <div class="sidebar-title" id="sidebar-user-title">메뉴</div>
+  <button class="sidebar-close" onclick="toggleSidebar(false)">✕</button>
+</div>
 <div class="sidebar-content">
-<div class="sidebar-item"><span class="sidebar-label">은행 잔고</span><span class="sidebar-value">₩<span id="bank-cash-val">0</span></span></div>
-<div class="sidebar-item" id="tier-box">
-<span class="sidebar-label">티어</span>
-<div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
-<span class="tier-badge" id="tier-badge">⚙️ 아이언4</span>
-<span style="font-size:.72rem;color:#aaa" id="tier-next">다음까지 ₩0</span>
+  <div class="sidebar-item">
+    <span class="sidebar-label">은행</span>
+    <span class="sidebar-value">₩<span id="bank-cash-val">0</span></span>
+  </div>
+  <div class="sidebar-item" id="tier-box">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <span class="tier-badge" id="tier-badge">⚙️ 아이언4</span>
+      <span style="font-size:.68rem;color:#888" id="tier-next">다음 ₩0</span>
+    </div>
+    <div class="tier-progress"><i id="tier-bar" style="width:0%"></i></div>
+    <div id="tier-perks" style="display:none">혜택</div>
+  </div>
+
+  <div class="sidebar-item">
+    <span class="sidebar-label">출금 (은행 → 보유)</span>
+    <div class="withdraw-box">
+      <input type="number" id="withdraw-input-amt" class="withdraw-input" placeholder="금액">
+      <button class="withdraw-btn" onclick="processWithdraw()">출금</button>
+    </div>
+  </div>
+  <div class="sidebar-item">
+    <span class="sidebar-label">마감 롤링</span>
+    <span class="sidebar-value"><span id="rolling-progress-val">0</span> / <span id="rolling-target-val">0</span></span>
+  </div>
+
+  <div class="sb-section">바로가기</div>
+  <div class="sb-grid">
+    <button type="button" onclick="openRankingModal()">랭킹</button>
+    <button type="button" onclick="openMissions()">미션</button>
+    <button type="button" onclick="openStatsModal()">전적</button>
+    <button type="button" onclick="openTierBenefits()">티어혜택</button>
+    <button type="button" onclick="openMessenger()">쪽지 <span class="msg-badge" id="msg-badge">0</span></button>
+    <button type="button" onclick="openTransferModal()">송금</button>
+    <button type="button" onclick="openTxHistory()">입출금</button>
+    <button type="button" id="attendance-btn" onclick="doAttendance()">출석</button>
+    <button type="button" onclick="openSeasonRewards()">시즌보상</button>
+    <button type="button" onclick="showPatchNotesFromMenu()">패치노트</button>
+    <button type="button" onclick="openSettingsModal()">설정</button>
+    <button type="button" onclick="openSafety()">안전장치</button>
+  </div>
+
+  <button type="button" class="sb-btn" id="recovery-btn" onclick="claimRecovery()" style="margin-top:4px">파산 재기 지원</button>
+  <div id="recovery-hint" style="font-size:.65rem;color:#6b7280;margin-top:2px;display:none"></div>
+  <div class="att-cal" id="att-calendar" style="margin-top:6px"></div>
+
+  <button type="button" class="sb-btn" id="sfx-toggle-btn" onclick="toggleSfx()" style="margin-top:8px">효과음 ON</button>
+  <button type="button" class="sb-btn admin-open-btn" id="admin-menu-btn" style="display:none" onclick="openAdminPanel()">관리자</button>
+  <button type="button" class="sb-btn" onclick="handleLogout()" style="margin-top:6px">로그아웃</button>
+  <button type="button" class="sb-btn" onclick="handleDeleteAccount()" style="margin-top:4px;color:#fca5a5!important;border-color:rgba(248,113,113,.25)!important">회원 탈퇴</button>
 </div>
-<div class="tier-progress"><i id="tier-bar" style="width:0%"></i></div>
-<div id="tier-perks" style="font-size:.68rem;color:#9ca3af;margin-top:6px;line-height:1.4">혜택 로딩…</div>
-<button type="button" onclick="openTierBenefits()" style="margin-top:8px;width:100%;padding:8px;border-radius:8px;border:1px solid rgba(255,215,0,.35);background:rgba(255,215,0,.1);color:#ffd700;font-weight:700;font-size:.78rem;cursor:pointer">🎖 티어 혜택 보기</button>
-<button type="button" onclick="showPatchNotesFromMenu()" style="margin-top:6px;width:100%;padding:8px;border-radius:8px;border:1px solid rgba(147,197,253,.35);background:rgba(59,130,246,.12);color:#93c5fd;font-weight:700;font-size:.78rem;cursor:pointer">📋 패치 노트</button>
-<button type="button" onclick="openMissions()" style="margin-top:6px;width:100%;padding:8px;border-radius:8px;border:1px solid rgba(96,165,250,.35);background:rgba(59,130,246,.12);color:#93c5fd;font-weight:700;font-size:.78rem;cursor:pointer">🎯 일일 미션</button>
-
-<button type="button" onclick="openStatsModal()" style="margin-top:6px;width:100%;padding:8px;border-radius:8px;border:1px solid rgba(52,211,153,.35);background:rgba(16,185,129,.12);color:#34d399;font-weight:700;font-size:.78rem;cursor:pointer">📊 내 전적</button>
-<button type="button" onclick="openSettingsModal()" style="margin-top:6px;width:100%;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.06);color:#e5e7eb;font-weight:700;font-size:.78rem;cursor:pointer">⚙️ 설정</button>
-<button type="button" onclick="openSeasonRewards()" style="margin-top:6px;width:100%;padding:8px;border-radius:8px;border:1px solid rgba(251,191,36,.35);background:rgba(251,191,36,.1);color:#fbbf24;font-weight:700;font-size:.78rem;cursor:pointer">🏆 시즌 보상</button>
-
-<button type="button" id="recovery-btn" onclick="claimRecovery()" style="margin-top:6px;width:100%;padding:8px;border-radius:8px;border:1px solid rgba(74,222,128,.4);background:rgba(74,222,128,.12);color:#4ade80;font-weight:700;font-size:.78rem;cursor:pointer">🆘 파산 재기 지원</button>
-<div id="recovery-hint" style="font-size:.68rem;color:#9ca3af;margin-top:4px;line-height:1.35;display:none"></div>
-<div style="margin-top:10px;font-size:.75rem;color:#ffd700;font-weight:700">📅 출석</div><div class="att-cal" id="att-calendar"></div>
-
-
-<button type="button" onclick="openSafety()" style="margin-top:6px;width:100%;padding:8px;border-radius:8px;border:1px solid rgba(248,113,113,.35);background:rgba(239,68,68,.1);color:#fca5a5;font-weight:700;font-size:.78rem;cursor:pointer">🛡 안전장치</button>
 </div>
-<div class="sidebar-item"><span class="sidebar-label">출금 (잔고 → 보유금)</span><div class="withdraw-box"><input type="number" id="withdraw-input-amt" class="withdraw-input" placeholder="금액 입력"><button class="withdraw-btn" onclick="processWithdraw()">출금하기</button></div></div>
-<div class="sidebar-item"><span class="sidebar-label">마감 롤링 (티어 반영)</span><span class="sidebar-value"><span id="rolling-progress-val">0</span> / <span id="rolling-target-val">0</span></span></div>
-<button class="sidebar-btn rank-open-btn" onclick="openRankingModal()">🏆 랭킹 보기</button>
-<button class="sidebar-btn" style="background:rgba(59,130,246,.15);border:1px solid #3b82f6;color:#60a5fa;display:flex;align-items:center;justify-content:center" onclick="openMessenger()">💬 쪽지<span class="msg-badge" id="msg-badge">0</span></button>
-<button class="sidebar-btn" style="background:rgba(34,197,94,.15);border:1px solid #22c55e;color:#4ade80" onclick="openTransferModal()">💸 송금하기</button>
-<button class="sidebar-btn" style="background:rgba(168,85,247,.12);border:1px solid #a855f7;color:#c084fc" onclick="openTxHistory()">📋 입출금 기록</button>
-<button class="sidebar-btn" id="attendance-btn" style="background:rgba(251,191,36,.12);border:1px solid #fbbf24;color:#fcd34d" onclick="doAttendance()">📅 출석체크</button>
-<button class="sidebar-btn" id="sfx-toggle-btn" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:#ddd" onclick="toggleSfx()">🔊 효과음 ON</button>
-<button class="sidebar-btn admin-open-btn" id="admin-menu-btn" style="display:none" onclick="openAdminPanel()">관리자 모드</button>
-<button class="sidebar-btn logout-btn" onclick="handleDeleteAccount()" style="background:rgba(120,40,40,.25);border-color:#a33;color:#fca5a5">회원 탈퇴</button>
-<button class="sidebar-btn logout-btn" onclick="handleLogout()">로그아웃</button>
-</div></div>
 <div class="screen active" id="screen-lobby">
 <div class="header-bar"><div class="header-left"><div class="header-title" id="header-nickname">ROYAL CASINO</div><div id="diff-banner" class="diff-banner normal">보통 · 96%</div></div><button class="menu-btn" onclick="toggleSidebar(true)">메뉴<span class="menu-unread" data-menu-unread>0</span></button></div>
 <div class="lobby-hero"><h1>ROYAL CASINO</h1><p>티어 · 미션 · 솔로 시뮬레이션</p><p style="font-size:.68rem;color:#6b7280;margin-top:4px">플레이 전 메뉴에서 은행 → 보유금 출금</p></div>
@@ -3560,7 +3598,7 @@ function closeSettingsModal(){const ov=document.getElementById('settings-overlay
 function applyCustomChips(){const raw=((document.getElementById('set-chips')||{}).value||'').split(/[,\s]+/).map(x=>parseInt(x,10)).filter(x=>x>0).slice(0,8);if(raw.length)window.CHIP_VALUES=raw;}
 function snapBets(){try{window._lastBetsSnap=JSON.parse(JSON.stringify(bets));}catch(e){}}
 function snapBetsDT(){try{window._lastBetsDTSnap=JSON.parse(JSON.stringify(betsDT));}catch(e){}}
-function rebetBaccarat(){if(!isBettingOpen)return;const src=window._lastBetsSnap;if(!src){alert('이전 배팅 없음');return;}const total=Object.values(src).reduce((a,b)=>a+b,0);if(cash<total){alert('보유금 부족');return;}Object.keys(bets).forEach(k=>bets[k]=0);Object.keys(src).forEach(function(k){const amt=Math.floor(src[k]||0);if(amt>0){selectedChip=amt;try{placeBet(k);}catch(e){}}});}
+function rebetBaccarat(){if(!isBettingOpen)return;let src=window._lastBetsSnap;if(!src&&window.lastBetsBacc&&lastBetsBacc.length){src={};lastBetsBacc.forEach(function(x){src[x.type]=(src[x.type]||0)+(x.amt||0);});}if(!src){alert('이전 배팅 없음');return;}const total=Object.values(src).reduce((a,b)=>a+b,0);if(cash<total){alert('보유금 부족');return;}Object.keys(bets).forEach(k=>bets[k]=0);Object.keys(src).forEach(function(k){const amt=Math.floor(src[k]||0);if(amt>0){selectedChip=amt;try{placeBet(k);}catch(e){}}});}
 function doubleBetBaccarat(){if(!isBettingOpen)return;const cur=Object.assign({},bets);const total=Object.values(cur).reduce((a,b)=>a+b,0);if(total<=0){alert('배팅 후 사용');return;}if(cash<total){alert('보유금 부족');return;}Object.keys(cur).forEach(function(k){const amt=Math.floor(cur[k]||0);if(amt>0){selectedChip=amt;try{placeBet(k);}catch(e){}}});}
 function rebetDT(){if(!isBettingOpenDT)return;const src=window._lastBetsDTSnap;if(!src){alert('이전 배팅 없음');return;}Object.keys(betsDT).forEach(k=>betsDT[k]=0);Object.keys(src).forEach(function(k){const amt=Math.floor(src[k]||0);if(amt>0){selectedChip=amt;try{placeBetDT(k==='TIE'?'TIE':k);}catch(e){}}});}
 function doubleBetDT(){if(!isBettingOpenDT)return;const cur=Object.assign({},betsDT);Object.keys(cur).forEach(function(k){const amt=Math.floor(cur[k]||0);if(amt>0){selectedChip=amt;try{placeBetDT(k==='TIE'?'TIE':k);}catch(e){}}});}
