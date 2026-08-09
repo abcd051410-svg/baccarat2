@@ -3847,9 +3847,13 @@ def admin_fraud_scan():
             except (TypeError, ValueError):
                 amount = 0
             memo = row[3] or ""
-            # 정상 지급만 인정 (1건 상한 + 종류 제한) — 오염된 거액 거래 제외
+            # 관리자 지급·이체(송금입금)는 부당수익에서 제외 (정상 유입)
+            # 건당 상한은 데이터 오염(조 단위)만 컷
             if kind in ("전체지급", "관리자지급", "관리자입금"):
-                if 0 < amount <= 5_000_000:
+                if 0 < amount <= 100_000_000:
+                    grants[uname] = grants.get(uname, 0) + amount
+            elif kind == "송금입금":
+                if 0 < amount <= 100_000_000:
                     grants[uname] = grants.get(uname, 0) + amount
             elif kind == "재기지원":
                 if 0 < amount <= 200_000:
@@ -3883,17 +3887,18 @@ def admin_fraud_scan():
             last_seen = float(r[6] or 0)
             assets = cash + game
             grant = int(grants.get(uname, 0))
-            # 지급합 오염 방지
-            if grant > 50_000_000:
-                grant = 50_000_000
+            # 관리자 지급·이체 포함 (오염 방지 상한 3억)
+            if grant > 300_000_000:
+                grant = 300_000_000
+            # 자산보다 지급합이 비정상적으로 크면(오염) 0 처리하지 않고 자산+시드 수준으로 캡
             if grant > assets + SEED:
-                grant = 0
+                grant = int(assets + SEED)
             # --- 부당수익 (롤링 반영 조정) ---
             # 정상 플레이 허용: 롤링의 25% (최대 5,000만) — 운 좋은 수익 여유
             roll_allow = int(min(50_000_000, max(0, int(roll * 0.25))))
             fair_cap = int(SEED + grant + roll_allow)
             net_vs_seed = int(assets - SEED)
-            # 메인 부당수익 = 총자산 - 시드 - 지급 - 롤링허용
+            # 메인 부당수익 = 총자산 - 시드 - 관리자지급/이체/보상 - 롤링허용
             unfair = int(max(0, assets - fair_cap))
             unfair_adj = unfair
             # 시드·지급만 뺀 값 (참고)
@@ -4035,7 +4040,7 @@ def admin_fraud_recover():
             cursor.execute(
                 """
                 SELECT kind, amount FROM transactions
-                WHERE username=%s AND kind IN ('전체지급','관리자지급','관리자입금','재기지원','출석보상','미션보상')
+                WHERE username=%s AND kind IN ('전체지급','관리자지급','관리자입금','송금입금','재기지원','출석보상','미션보상')
                 ORDER BY id DESC LIMIT 500
                 """,
                 (username,),
@@ -4046,11 +4051,11 @@ def admin_fraud_recover():
                 except Exception:
                     amount = 0
                 kind = (kind or "").strip()
-                if kind in ("전체지급", "관리자지급", "관리자입금") and 0 < amount <= 5_000_000:
+                if kind in ("전체지급", "관리자지급", "관리자입금", "송금입금") and 0 < amount <= 100_000_000:
                     grant += amount
                 elif kind in ("재기지원", "출석보상", "미션보상") and 0 < amount <= 200_000:
                     grant += amount
-            grant = min(grant, 50_000_000)
+            grant = min(grant, 300_000_000)
         except Exception as e:
             print("grant calc", e)
             grant = 0
