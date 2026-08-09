@@ -67,7 +67,8 @@ def ensure_season_tables(cursor, conn):
             season_id INT NOT NULL DEFAULT 1,
             name VARCHAR(50) NOT NULL DEFAULT '시즌 1',
             label VARCHAR(50) NOT NULL DEFAULT 'ROYAL S1',
-            started_at DOUBLE PRECISION DEFAULT 0
+            started_at DOUBLE PRECISION DEFAULT 0,
+            duration_days INT DEFAULT 14
         )
         """
     )
@@ -114,11 +115,15 @@ def load_season_config_from_db():
             )
             row = cursor.fetchone()
             if row:
+                started = float(row[3] or 0)
+                duration = 14
                 SEASON_CONFIG = {
                     "id": int(row[0] or 1),
                     "name": row[1] or f"시즌 {int(row[0] or 1)}",
                     "label": row[2] or f"ROYAL S{int(row[0] or 1)}",
-                    "started_at": float(row[3] or 0),
+                    "started_at": started,
+                    "duration_days": duration,
+                    "ends_at": started + duration * 86400 if started else 0,
                 }
         finally:
             cursor.close()
@@ -419,6 +424,7 @@ def ensure_user_columns(cursor, conn=None):
         ("self_excluded", "BOOLEAN DEFAULT FALSE"),
         ("season_points", "BIGINT DEFAULT 0"),
         ("mission_data", "TEXT DEFAULT '{}'"),
+        ("last_recovery", "VARCHAR(20) DEFAULT ''"),
     ]
     for col, typedef in cols:
         try:
@@ -870,23 +876,32 @@ def get_balance():
 
 @app.route("/api/ranking", methods=["GET"])
 def get_ranking():
-    """랭킹용 유저 목록 (로그인 불필요)"""
+    """랭킹용 유저 목록 — 티어/시즌/총자산 공통 데이터"""
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
         try:
+            ensure_user_columns(cursor, conn)
+        except Exception:
+            pass
+        try:
             cursor.execute(
                 """
                 SELECT username, COALESCE(cash,0), COALESCE(game_cash,0), COALESCE(total_rolling,0),
-                       COALESCE(display_name,''), COALESCE(total_profit,0), COALESCE(last_seen,0)
+                       COALESCE(display_name,''), COALESCE(total_profit,0), COALESCE(last_seen,0),
+                       COALESCE(season_points,0)
                 FROM users
                 """
             )
         except Exception:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
             cursor.execute(
                 """
                 SELECT username, COALESCE(cash,0), COALESCE(game_cash,0), COALESCE(total_rolling,0),
-                       COALESCE(display_name,''), COALESCE(total_profit,0), 0
+                       COALESCE(display_name,''), COALESCE(total_profit,0), COALESCE(last_seen,0), 0
                 FROM users
                 """
             )
@@ -896,16 +911,20 @@ def get_ranking():
         users = []
         for r in rows:
             ls = float(r[6] or 0)
+            cash = int(r[1] or 0)
+            game = int(r[2] or 0)
             users.append({
                 "username": r[0],
-                "cash": int(r[1] or 0),
-                "game_cash": int(r[2] or 0),
+                "cash": cash,
+                "game_cash": game,
+                "total_assets": cash + game,
                 "total_rolling": int(r[3] or 0),
                 "display_name": r[4] or r[0],
                 "name": r[4] or r[0],
                 "total_profit": int(r[5] or 0),
                 "last_seen": ls,
                 "online": (now - ls) < 90 if ls else False,
+                "season_points": int(r[7] or 0),
                 "tier": get_tier(r[3] or 0),
             })
         return jsonify(users)
@@ -1367,8 +1386,8 @@ def api_close_session():
         session_profit = game - init_w
         bank2 = bank + game
         tot_profit2 = tot_profit + session_profit
-        # 시즌 포인트: 세션 수익이 양수일 때만 가산
-        season_add = max(0, int(session_profit))
+        # 시즌 포인트: 효율(수익률) + 수익(상한) — 대자본 절대액 편향 완화
+        season_add, season_detail = calc_season_points(init_w, game)
         try:
             cursor.execute(
                 """
@@ -1386,8 +1405,20 @@ def api_close_session():
                 """,
                 (bank2, tot_profit2, time.time(), auth_user),
             )
-        log_transaction(cursor, auth_user, "마감", game, bank2, f"세션수익 {session_profit}")
+            season_add = 0
+            season_detail = {"efficiency": 0, "profit_pts": 0, "profit": int(session_profit), "roi": 0}
+        log_transaction(
+            cursor, auth_user, "마감", game, bank2,
+            f"세션수익 {session_profit} · 시즌+{season_add} (효율{season_detail.get('efficiency',0)}/수익{season_detail.get('profit_pts',0)})"
+        )
         conn.commit()
+        # 갱신된 시즌 포인트 조회
+        try:
+            cursor.execute("SELECT COALESCE(season_points,0) FROM users WHERE username=%s", (auth_user,))
+            sp_row = cursor.fetchone()
+            season_total = int(sp_row[0] or 0) if sp_row else season_add
+        except Exception:
+            season_total = season_add
         cursor.close(); release_db(conn)
         return jsonify({
             "success": True,
@@ -1397,6 +1428,9 @@ def api_close_session():
             "current_rolling": 0,
             "total_profit": tot_profit2,
             "session_profit": session_profit,
+            "season_points_gained": season_add,
+            "season_points": season_total,
+            "season_detail": season_detail,
         })
     except Exception as e:
         print(f"close error: {e}")
@@ -1587,6 +1621,7 @@ def get_notice():
         "id": CURRENT_NOTICE["id"],
         "message": CURRENT_NOTICE["message"],
         "created_at": CURRENT_NOTICE.get("created_at", 0),
+        "important": bool(CURRENT_NOTICE.get("important")),
     })
 
 
@@ -2817,6 +2852,99 @@ def safety_self_exclude():
 
 
 
+
+
+# ===== 파산 재기 지원 (하루 1회) =====
+RECOVERY_AMOUNT = 70_000
+RECOVERY_BANK_MAX = 1_000  # 은행 잔고가 이 이하고 게임머니 0일 때
+
+
+@app.route("/api/recovery/status", methods=["GET", "POST"])
+def recovery_status():
+    try:
+        auth_user, err = require_user()
+        if err:
+            return err
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        ensure_user_columns(cursor, conn)
+        cursor.execute(
+            "SELECT COALESCE(cash,0), COALESCE(game_cash,0), COALESCE(last_recovery,'') FROM users WHERE username=%s",
+            (auth_user,),
+        )
+        row = cursor.fetchone()
+        cursor.close()
+        release_db(conn)
+        if not row:
+            return jsonify({"error": "유저 없음"}), 404
+        bank, game, last = int(row[0] or 0), int(row[1] or 0), (row[2] or "")
+        today = time.strftime("%Y-%m-%d")
+        broke = (game <= 0 and bank <= RECOVERY_BANK_MAX)
+        claimed_today = (last == today)
+        can_claim = broke and (not claimed_today)
+        return jsonify({
+            "success": True,
+            "broke": broke,
+            "can_claim": can_claim,
+            "claimed_today": claimed_today,
+            "amount": RECOVERY_AMOUNT,
+            "bank": bank,
+            "game_cash": game,
+            "last_recovery": last,
+        })
+    except Exception as e:
+        print(f"recovery status: {e}")
+        return jsonify({"error": "status error"}), 500
+
+
+@app.route("/api/recovery/claim", methods=["POST"])
+def recovery_claim():
+    """파산 유저 하루 1회 재기 지원금"""
+    try:
+        auth_user, err = require_user()
+        if err:
+            return err
+        today = time.strftime("%Y-%m-%d")
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        ensure_user_columns(cursor, conn)
+        cursor.execute(
+            "SELECT COALESCE(cash,0), COALESCE(game_cash,0), COALESCE(last_recovery,'') FROM users WHERE username=%s FOR UPDATE",
+            (auth_user,),
+        )
+        row = cursor.fetchone()
+        if not row:
+            cursor.close(); release_db(conn)
+            return jsonify({"error": "유저 없음"}), 404
+        bank, game, last = int(row[0] or 0), int(row[1] or 0), (row[2] or "")
+        if last == today:
+            cursor.close(); release_db(conn)
+            return jsonify({"error": "오늘은 이미 재기 지원을 받았습니다."}), 400
+        if game > 0 or bank > RECOVERY_BANK_MAX:
+            cursor.close(); release_db(conn)
+            return jsonify({"error": "파산 상태가 아닙니다. (게임머니 0 · 은행 잔고 부족 시만 가능)"}), 400
+
+        # 게임머니로 지급 (바로 플레이 가능)
+        new_game = RECOVERY_AMOUNT
+        cursor.execute(
+            "UPDATE users SET game_cash=%s, last_recovery=%s WHERE username=%s",
+            (new_game, today, auth_user),
+        )
+        log_transaction(cursor, auth_user, "재기지원", RECOVERY_AMOUNT, bank, "일일 파산 재기 지원")
+        conn.commit()
+        cursor.close()
+        release_db(conn)
+        return jsonify({
+            "success": True,
+            "amount": RECOVERY_AMOUNT,
+            "game_cash": new_game,
+            "message": f"재기 지원금 ₩{RECOVERY_AMOUNT:,} 지급 완료",
+        })
+    except Exception as e:
+        print(f"recovery claim: {e}")
+        return jsonify({"error": "재기 지원 처리 실패"}), 500
+
+
 @app.route("/api/season/ranking", methods=["GET"])
 def season_ranking():
     """현재 또는 특정 시즌 랭킹. ?season_id= 없으면 현재 시즌 실시간."""
@@ -2955,7 +3083,7 @@ def season_list():
 @app.route("/api/admin/season/end", methods=["POST"])
 def admin_season_end():
     """시즌 종료 → 스냅샷 저장 → 포인트 초기화 → 다음 시즌 시작"""
-    global SEASON_CONFIG
+    global SEASON_CONFIG, CURRENT_NOTICE
     try:
         auth_admin, err = require_admin()
         if err:
@@ -3034,6 +3162,23 @@ def admin_season_end():
                 "name": f"시즌 {new_id}",
                 "label": f"ROYAL S{new_id}",
                 "started_at": ended_at,
+                "duration_days": 14,
+                "ends_at": ended_at + 14 * 86400,
+            }
+            # 전체 유저 중요 공지 (팝업)
+            CURRENT_NOTICE = {
+                "id": f"season_end_{old_id}_{int(ended_at)}",
+                "message": (
+                    "📢 [중요] 시즌 종료 알림\n\n"
+                    + f"{old_name} ({old_label})이(가) 종료되었습니다.\n"
+                    + f"시즌 점수가 초기화되고 {SEASON_CONFIG['name']}이(가) 시작됩니다.\n\n"
+                    + "• 은행/게임 머니: 유지\n"
+                    + "• 티어/롤링: 유지\n"
+                    + "• 시즌 포인트: 0으로 리셋\n\n"
+                    + "새 시즌에서 다시 도전해 보세요!"
+                ),
+                "created_at": ended_at,
+                "important": True,
             }
             cursor.execute(
                 """
