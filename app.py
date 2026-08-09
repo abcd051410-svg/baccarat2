@@ -3452,18 +3452,27 @@ def admin_fraud_scan():
             last_seen = float(r[6] or 0)
             assets = cash + game
             grant = int(grants.get(uname, 0))
-            # 정상 기대 상한: 시드 + 지급/출석/미션 + 롤링의 일부(운 좋은 플레이)
-            fair_cap = SEED + grant + min(roll, max(0, int(roll * 0.15))) + 500_000
-            unfair = max(0, assets - fair_cap)
+            # --- 부당수익 계산 (0원 버그 수정) ---
+            # 1) 시드 대비 순증
+            net_vs_seed = int(assets - SEED)
+            # 2) 기본 부당수익 = 총자산 - 시드 - (관리자/출석/미션 지급)
+            #    ※ 롤링은 "허용 한도"에만 소량 반영 (최대 2,000만)
+            roll_allow = int(min(20_000_000, max(0, roll * 0.10)))
+            fair_cap = int(SEED + grant + roll_allow + 300_000)
+            unfair = int(max(0, assets - SEED - grant))  # 관리자 화면에 보여 줄 메인 수치
+            unfair_adj = int(max(0, assets - fair_cap))  # 롤링 여유 반영 보수 수치
+            if unfair_adj > unfair:
+                unfair_adj = unfair
+
             # 마감 세션 수익 합 (양수만)
             cps = close_profits.get(uname, [])
-            close_pos = sum(x for x in cps if x > 0)
-            close_max = max(cps) if cps else 0
-            close_big = sum(1 for x in cps if x >= 3_000_000)
+            close_pos = int(sum(x for x in cps if x > 0))
+            close_max = int(max(cps) if cps else 0)
+            close_big = int(sum(1 for x in cps if x >= 3_000_000))
 
             flags = []
             score = 0
-            if unfair >= 5_000_000:
+            if unfair >= 5_000_000 or close_max >= 10_000_000:
                 flags.append("고액_부당수익")
                 score += 40
             elif unfair >= 1_000_000:
@@ -3488,6 +3497,7 @@ def admin_fraud_scan():
                 flags.append("자산_2천만이상")
                 score += 10
 
+            # 플래그 없어도 부당수익 50만 이상이면 목록에 포함
             if not flags and unfair < 500_000:
                 continue
 
@@ -3501,11 +3511,13 @@ def admin_fraud_scan():
                 "total_rolling": roll,
                 "total_profit": tprofit,
                 "admin_grants": grant,
-                "fair_cap": int(fair_cap),
-                "unfair_profit": int(unfair),
-                "close_profit_sum": int(close_pos),
-                "close_profit_max": int(close_max),
-                "close_big_count": int(close_big),
+                "fair_cap": fair_cap,
+                "net_vs_seed": net_vs_seed,
+                "unfair_profit": unfair,
+                "unfair_profit_adj": unfair_adj,
+                "close_profit_sum": close_pos,
+                "close_profit_max": close_max,
+                "close_big_count": close_big,
                 "flags": flags,
                 "score": score,
                 "risk": risk,
@@ -3515,7 +3527,7 @@ def admin_fraud_scan():
             })
 
         results.sort(key=lambda x: (-x["score"], -x["unfair_profit"], -x["assets"]))
-        total_unfair = sum(x["unfair_profit"] for x in results)
+        total_unfair = int(sum(int(x.get("unfair_profit") or 0) for x in results))
         cursor.close()
         release_db(conn)
         return jsonify({
@@ -3526,7 +3538,7 @@ def admin_fraud_scan():
             "total_unfair_estimate": total_unfair,
             "users": results,
             "rules": [
-                "부당수익 ≈ 총자산 - (시드 + 관리자/출석/미션지급 + 롤링15% + 50만 여유)",
+                "부당수익 = 총자산 - 시드(100만) - 관리자/출석/미션 지급합",
                 "대형 세션수익: 마감 1회 300만 이상",
                 "초대형 세션수익: 마감 1회 1000만 이상",
                 "저롤링 고자산: 자산 대비 롤링 과소",
